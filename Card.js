@@ -1,6 +1,8 @@
 // Card class for advanced card rendering and animations
 // Supports both standard playing cards (suit/value) and hotpot cards (category/ingredient)
 class Card {
+    static glowPhase = 0;
+
     constructor(suitOrCategory, valueOrIngredient, game, scale = 1) {
         this.game = game || null;
 
@@ -43,7 +45,6 @@ class Card {
         this.animating = false;
         this.highlighted = null;
         this.glowing = false;
-        this.glowPhase = 0;
 
         // Flip animation (self-contained, no game.animation dependency)
         this.flipping = false;
@@ -144,10 +145,6 @@ class Card {
             stillAnimating = true;
         }
 
-     if (this.glowing) {
-            this.glowPhase += 0.04;
-        }
-
         this.animating = stillAnimating;
         return stillAnimating;
     }
@@ -203,7 +200,7 @@ class Card {
         if (this.glowing) {
             ctx.save();
             if (wasMirrored) ctx.scale(-1, 1);
-            const pulse = 0.5 + 0.5 * Math.sin(this.glowPhase);
+            const pulse = 0.5 + 0.5 * Math.sin(Card.glowPhase);
             ctx.shadowColor = HOTPOT.COLORS.GLOW;
             ctx.shadowBlur = 10 + pulse * 12;
             ctx.strokeStyle = HOTPOT.COLORS.GLOW;

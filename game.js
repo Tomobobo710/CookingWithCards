@@ -222,6 +222,7 @@ class Game {
         this.animationTime += dt;
 
         this.updateCards();
+        Card.glowPhase += 0.04;
 
         // Handle online GUI
         if (this.gameState === 'multiplayerLogin' && this.gui) {
@@ -1316,7 +1317,62 @@ class Game {
         }
     }
 
+    setGlowingForLocalPlayer() {
+        if (this.gameState !== 'playing' && this.gameState !== 'gameOver' && this.gameState !== 'onlineMultiplayer') {
+            // Clear all glows during menus
+            for (const player of this.state.players) {
+                for (const card of player.hand) card.glowing = false;
+                if (player.drawnCard) player.drawnCard.glowing = false;
+            }
+            for (const card of this.state.deck) card.glowing = false;
+            return;
+        }
+
+        // Clear all glows first
+        for (const player of this.state.players) {
+            for (const card of player.hand) card.glowing = false;
+            for (const card of player.discardPile) card.glowing = false;
+            if (player.drawnCard) player.drawnCard.glowing = false;
+        }
+        for (const card of this.state.deck) card.glowing = false;
+
+        const localPlayer = this.findLocalPlayer();
+
+        // Determine if it's local player's turn
+        let isLocalTurn = false;
+        if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+            isLocalTurn = this.networkSession.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+        } else {
+            isLocalTurn = this.state.getCurrentPlayer() === localPlayer;
+        }
+
+        if (!isLocalTurn) return;
+
+        // Draw phase: discard pile cards are clickable
+        if (this.turnPhase === 'draw') {
+            for (const player of this.state.players) {
+                if (player === localPlayer) continue;
+                if (player.discardPile.length > 0) {
+                    const topCard = player.discardPile[player.discardPile.length - 1];
+                    topCard.glowing = true;
+                }
+            }
+        }
+
+        // Discard phase: hand cards and drawn card are clickable
+        if (this.turnPhase === 'discard') {
+            for (const card of localPlayer.hand) {
+                card.glowing = true;
+            }
+            if (localPlayer.drawnCard) {
+                localPlayer.drawnCard.glowing = true;
+            }
+        }
+    }
+
     drawGameTable() {
+        this.setGlowingForLocalPlayer();
+
         const currentPlayer = this.state.getCurrentPlayer();
 
         this.drawDeck();
@@ -1448,7 +1504,6 @@ class Game {
                 const topCard = p.discardPile[p.discardPile.length - 1];
                 topCard.moveTo(rect.x, rect.y);
                 topCard.scaleTo(0.75);
-                topCard.glowing = canClick;
                 topCard.draw(this.gameCtx);
             } else {
                 this.gameCtx.fillStyle = 'rgba(80,40,20,0.6)';
