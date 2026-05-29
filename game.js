@@ -655,9 +655,13 @@ updateBotTurn(player) {
                     const discardRect = this.getDiscardRect(bestStealTarget.id);
                     player.drawnCard.x = discardRect.x;
                     player.drawnCard.y = discardRect.y;
+                    player.drawnCard.rotation = 0;
+                    player.drawnCard.targetRotation = 0;
+                    player.drawnCard.scale = 0.75;
+                    player.drawnCard.targetScale = 0.75;
+                    player.drawnCard.faceUp = true;
                     player.drawnCard.targetX = discardRect.x;
                     player.drawnCard.targetY = discardRect.y;
-                    player.drawnCard.faceUp = true;
                 } else if (this.state.deck.length > 0) {
                     this.state.drawFromDeck(player);
                     player.botDrawSource = 'deck';
@@ -702,9 +706,6 @@ updateBotTurn(player) {
 
             const drawAnimDuration = speedCfg.botDelay + speedCfg.thinkExtra;
             if (player.botTimer >= drawAnimDuration) {
-                if (player.botDrawSource === 'discard') {
-                    player.drawnCard.flip();
-                }
                 player.botPhase = 'think';
                 player.botTimer = 0;
             }
@@ -752,36 +753,24 @@ updateBotTurn(player) {
                     this.endTurn();
                     player.botStarted = false;
                 }
-            } else {
+           } else {
                 // Discard a hand card: animate it from hand to discard pile
                 const discardedCard = player.botDiscardCard;
                 if (discardedCard) {
                     const discardPileRect = this.getDiscardRect(player.id);
                     discardedCard.targetX = discardPileRect.x;
                     discardedCard.targetY = discardPileRect.y;
+                    this.applySpeedToCard(discardedCard);
 
                     const discardAnimDuration = speedCfg.botDelay + speedCfg.thinkExtra;
                     if (player.botTimer >= discardAnimDuration) {
-                        this.applySpeedToCard(discardedCard);
                         this.state.discardCard(player, discardedCard);
                         this.audio.play('discard', { volume: 0.2 });
-
-                        // Now move drawn card into hand
                         player.drawnCard.faceUp = false;
-                        const handRects = this.getHandCardRects(player.id);
-                        if (handRects.length > 0) {
-                            const lastRect = handRects[handRects.length - 1];
-                            player.drawnCard.targetX = lastRect.x;
-                            player.drawnCard.targetY = lastRect.y;
-                        }
-
-                        const handAnimDuration = speedCfg.botDelay + speedCfg.thinkExtra;
-                        if (player.botTimer >= discardAnimDuration + handAnimDuration) {
-                            player.hand.push(player.drawnCard);
-                            player.drawnCard = null;
-                            this.endTurn();
-                            player.botStarted = false;
-                        }
+                        player.hand.push(player.drawnCard);
+                        player.drawnCard = null;
+                        this.endTurn();
+                        player.botStarted = false;
                     }
                 }
             }
@@ -802,8 +791,8 @@ updateBotTurn(player) {
         const actingPlayer = this.state.getCurrentPlayer();
         actingPlayer.hasDrawn = false;
 
-        if (actingPlayer.drawnCard) {
-           if (!actingPlayer.isHuman) {
+       if (actingPlayer.drawnCard) {
+            if (!actingPlayer.isHuman) {
                 const botIdx = this.state.players.indexOf(actingPlayer);
                 const ha = botIdx === 1 ? Math.PI / 2 : (botIdx === 2 ? Math.PI : -Math.PI / 2);
                 this.applySpeedToCard(actingPlayer.drawnCard);
@@ -811,7 +800,6 @@ updateBotTurn(player) {
                 actingPlayer.drawnCard.rotateTo(ha);
                 actingPlayer.drawnCard.scaleTo(0.375);
             }
-            actingPlayer.hand.push(actingPlayer.drawnCard);
         }
         actingPlayer.drawnCard = null;
 
