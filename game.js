@@ -1753,9 +1753,7 @@ class Game {
             this.gameCtx.font = 'bold 18px Arial';
 
             const human = this.findLocalPlayer();
-            if (human.sets.length > 0 || human.won) {
-                this.gameCtx.fillText(`Your sets: ${human.sets.length}`, HOTPOT.WIDTH / 2, 210);
-            }
+            this.gameCtx.fillText(`Your sets: ${human.sets.length}`, HOTPOT.WIDTH / 2, 210);
 
             let y = 250;
             for (const p of this.state.players) {
