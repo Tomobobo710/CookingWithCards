@@ -300,6 +300,17 @@ class Game {
                             this.applySpeedToAllCards();
                         } else if (btn.action === 'quit') {
                             this.settingsOpen = false;
+                            if (this.networkSession) {
+                                this.networkSession.leave();
+                                this.networkSession = null;
+                            }
+                            if (this.gui && this.gui.isConnected()) {
+                                this.gui.getNetManager().disconnect();
+                                this.gui.currentState = "LOGIN";
+                                this.gui.selectedIndex = 0;
+                                this.gui.serverStatus = "UNKNOWN";
+                                this.gui.serverStatusColor = "#ffff00";
+                            }
                             this.clearGameState();
                             this.gameState = 'menu';
                         }
