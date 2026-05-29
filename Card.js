@@ -221,16 +221,25 @@ class Card {
     drawHotpotFace(ctx) {
         const padding = 4 * this.scale;
 
+        // Center: ingredient name (main label)
         ctx.fillStyle = this.textColor;
-        ctx.font = `bold ${11 * this.scale}px Arial`;
+        ctx.font = `bold ${14 * this.scale}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(this.ingredient, 0, -this.height / 4);
+        ctx.fillText(this.ingredient, 0, -this.height / 6);
 
-        ctx.font = `${22 * this.scale}px Arial`;
-        ctx.fillText(HOTPOT.CATEGORIES[this.category].icon, 0, this.height * 0.08);
+        // Center below: large ingredient emoji
+        ctx.font = `${36 * this.scale}px Arial`;
+        ctx.fillText(HOTPOT.CATEGORIES[this.category].ingredients[this.ingredient], 0, this.height * 0.2);
 
-        ctx.font = `${8 * this.scale}px Arial`;
+        // Top-right corner: small category icon
+        ctx.font = `${11 * this.scale}px Arial`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText(HOTPOT.CATEGORIES[this.category].icon, this.width / 2 - 2 * this.scale, -this.height / 2 + padding);
+
+        // Top-left corner: category name
+        ctx.font = `bold ${13 * this.scale}px Arial`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillText(this.category, -this.width / 2 + padding, -this.height / 2 + padding);
@@ -303,3 +312,8 @@ class Card {
         }
     }
 }
+
+
+
+
+

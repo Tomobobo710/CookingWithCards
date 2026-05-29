@@ -9,15 +9,15 @@ const HOTPOT = {
     WIDTH: 800,
     HEIGHT: 600,
 
-    CATEGORIES: {
-        'Noodles':  { color: '#D4B896', icon: '🍜', ingredients: ['Rice Noodles', 'Wheat Noodles', 'Glass Noodles'] },
-        'Fish':     { color: '#5B9BD5', icon: '🐟', ingredients: ['Salmon', 'Tuna', 'Bass'] },
-        'Greens':   { color: '#70AD47', icon: '🥬', ingredients: ['Spinach', 'Kale', 'Bok Choy'] },
-        'Spices':   { color: '#ED7D31', icon: '🌶️', ingredients: ['Chili', 'Star Anise', 'Cinnamon'] },
-        'Veggies':  { color: '#FFC000', icon: '🥕', ingredients: ['Carrot', 'Potato', 'Corn'] },
-        'Meat':     { color: '#C00000', icon: '🥩', ingredients: ['Beef', 'Pork', 'Chicken'] },
-        'Mushrooms':{ color: '#9B59B6', icon: '🍄', ingredients: ['Shiitake', 'Enoki', 'Morel'] },
-        'Carbs':    { color: '#A0A0A0', icon: '🍚', ingredients: ['Rice Cake', 'Tofu', 'Dumpling'] }
+   CATEGORIES: {
+        'Noodles':  { color: '#D4B896', icon: '🍜', ingredients: { 'Rice': '🍚', 'Wheat': '🌾', 'Glass': '🧊' } },
+        'Fish':     { color: '#5B9BD5', icon: '🐟', ingredients: { 'Salmon': '🐠', 'Tuna': '🐡', 'Bass': '🐟' } },
+        'Greens':   { color: '#70AD47', icon: '🥦', ingredients: { 'Spinach': '🍃', 'Kale': '🥬', 'Bok Choy': '🌿' } },
+        'Spices':   { color: '#ED7D31', icon: '🧂', ingredients: { 'Chili': '🌶️', 'Anise': '🍬', 'Cinnamon': '🟤' } },
+        'Veggies':  { color: '#FFC000', icon: '🥒', ingredients: { 'Carrot': '🥕', 'Potato': '🥔', 'Corn': '🌽' } },
+        'Meat':     { color: '#C00000', icon: '🍖', ingredients: { 'Beef': '🥩', 'Pork': '🥓', 'Chicken': '🍗' } },
+        'Shrooms':{ color: '#9B59B6', icon: '🍄', ingredients: { 'Shiitake': '🌰', 'Enoki': '🥢', 'Morel': '🗻' } },
+        'Carbs':    { color: '#A0A0A0', icon: '🍚', ingredients: { 'Rice Cake': '🍙', 'Tofu': '🧈', 'Dumpling': '🥟' } }
     },
 
     getCategories() { return Object.keys(HOTPOT.CATEGORIES); },
@@ -111,7 +111,7 @@ class GameState {
     createDeck() {
         this.deck = [];
         for (const [catName, catData] of Object.entries(HOTPOT.CATEGORIES)) {
-            for (const ingredient of catData.ingredients) {
+            for (const ingredient of Object.keys(catData.ingredients)) {
                 for (let copy = 0; copy < HOTPOT.GAME.COPIES_PER_INGREDIENT; copy++) {
                     this.deck.push(new Card(catName, ingredient, null, HOTPOT.CARD_SCALE));
                 }
@@ -713,7 +713,7 @@ class Game {
         const categoryOrder = Object.keys(HOTPOT.CATEGORIES);
         const ingredientOrder = {};
         for (const [cat, data] of Object.entries(HOTPOT.CATEGORIES)) {
-            ingredientOrder[cat] = data.ingredients;
+            ingredientOrder[cat] = Object.keys(data.ingredients);
         }
         player.hand.sort((a, b) => {
             const catDiff = categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category);
@@ -795,7 +795,7 @@ class Game {
     }
 
     getDrawnCardRect() {
-        return { x: HOTPOT.WIDTH / 2 + 100, y: HOTPOT.UI.DRAWN_Y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
+        return { x: HOTPOT.WIDTH / 2 + 200, y: HOTPOT.UI.DRAWN_Y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
     }
 
     // ---------- Draw ----------
@@ -1010,8 +1010,8 @@ class Game {
         const cards = player.hand;
         if (cards.length === 0) return;
 
-        const cardScale = 0.375;
-        const spacing = 4;
+        const cardScale = 0.5625;
+        const spacing = 6;
         const fw = 80 * cardScale;
         const fh = 115 * cardScale;
 
@@ -1029,20 +1029,22 @@ class Game {
             let cx, cy;
 
             if (index === 1) {          // Left — vertical, 90°
-                const totalH = cards.length * fh + (cards.length - 1) * spacing;
+                const visualH = fw;
+                const totalH = cards.length * visualH + (cards.length - 1) * spacing;
                 const startY = (HOTPOT.HEIGHT - totalH) / 2;
                 cx = fw / 2 + 12;
-                cy = startY + i * (fh + spacing) + fh / 2;
+                cy = startY + i * (visualH + spacing) + visualH / 2;
             } else if (index === 2) {   // Top — horizontal, 180°
                 const totalW = cards.length * fw + (cards.length - 1) * spacing;
                 const startX = (HOTPOT.WIDTH - totalW) / 2;
                 cx = startX + i * (fw + spacing) + fw / 2;
                 cy = fh / 2 + 10;
             } else {                    // Right — vertical, 270°
-                const totalH = cards.length * fh + (cards.length - 1) * spacing;
+                const visualH = fw;
+                const totalH = cards.length * visualH + (cards.length - 1) * spacing;
                 const startY = (HOTPOT.HEIGHT - totalH) / 2;
                 cx = HOTPOT.WIDTH - fw / 2 - 12;
-                cy = startY + i * (fh + spacing) + fh / 2;
+                cy = startY + i * (visualH + spacing) + visualH / 2;
             }
 
             card.moveTo(cx - fw / 2, cy - fh / 2);
