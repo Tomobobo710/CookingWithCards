@@ -885,16 +885,28 @@ class HotpotNetworkSession {
             // Sync drawn card (preserve object if possible)
             if (remoteData.drawnCard) {
                 if (!localPlayer.drawnCard) {
-                    const nc = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, null, 0.5);
                     const src = remoteData.drawnCard.drawSourcePlayer;
+                    let card;
                     if (src === -1) {
-                        nc.x = deckRect.x; nc.y = deckRect.y;
-                    } else if (typeof src === 'number' && seatMap[src]) {
-                        nc.x = seatMap[src].x; nc.y = seatMap[src].y;
+                        // Drawn from deck — create new card at deck position
+                        card = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, null, 0.5);
+                        card.x = deckRect.x; card.y = deckRect.y;
+                    } else if (typeof src === 'number') {
+                        // Stolen from another player's discard pile — find and move it
+                        const sourcePlayer = this.game.state.players[src];
+                        if (!sourcePlayer || sourcePlayer.discardPile.length === 0) {
+                            throw new Error('[NetworkSession] Cannot steal card from empty discard pile');
+                        }
+                        const topCard = sourcePlayer.discardPile[sourcePlayer.discardPile.length - 1];
+                        if (topCard.category !== remoteData.drawnCard.category || topCard.ingredient !== remoteData.drawnCard.ingredient) {
+                            throw new Error('[NetworkSession] Stolen card does not match top of discard pile');
+                        }
+                        this.gameState.drawFromDiscard(localPlayer, sourcePlayer);
+                        card = localPlayer.drawnCard;
                     } else {
-                        throw new Error('[NetworkSession] Cannot create drawn card without valid source position');
+                        throw new Error('[NetworkSession] Invalid drawSourcePlayer');
                     }
-                    localPlayer.drawnCard = nc;
+                    localPlayer.drawnCard = card;
                 } else {
                     localPlayer.drawnCard.category = remoteData.drawnCard.category;
                     localPlayer.drawnCard.ingredient = remoteData.drawnCard.ingredient;

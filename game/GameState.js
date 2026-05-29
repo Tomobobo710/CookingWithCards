@@ -120,8 +120,8 @@ class GameState {
             const currentMod = ((card.rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
             const toZero = (2 * Math.PI) - currentMod;
             const extraSpins = Math.PI * 2 * (1 + Math.floor(Math.random() * 1.5));
-            card.rotateTo(card.rotation + toZero + extraSpins);
-            player.discardPile.push(card);
+              card.rotateTo(card.rotation + toZero + extraSpins);
+             player.discardPile.push(card);
             player.lastDiscard = { category: card.category, ingredient: card.ingredient, source: handIdx >= 0 ? 'hand' : 'drawnCard', handIndex: handIdx >= 0 ? handIdx : -1 };
         }
         return removed;
