@@ -533,9 +533,64 @@ class Game {
         }
     }
 
+    calculateScores() {
+        for (const p of this.state.players) {
+            const allCards = p.getAllCards();
+            const allSets = this.state.findAllPossibleSets(allCards);
+            let points = 0;
+            const used = new Set();
+            function backtrack(start, found) {
+                for (let si = start; si < allSets.length; si++) {
+                    const setCards = allSets[si];
+                    if (setCards.some(c => used.has(c))) continue;
+                    for (const c of setCards) used.add(c);
+                    let setPoints = 0;
+                    const a = setCards[0], b = setCards[1], c = setCards[2];
+                    if (a.ingredient === b.ingredient && b.ingredient === c.ingredient) {
+                        setPoints = 120;
+                    } else {
+                        setPoints = 60;
+                    }
+                    found.push([setCards, setPoints]);
+                    backtrack(si + 1, found);
+                    found.pop();
+                    for (const c of setCards) used.delete(c);
+                }
+            }
+            let bestSets = [];
+            let bestPoints = 0;
+            function scoreBacktrack(start, found, currentPoints) {
+                if (currentPoints > bestPoints) {
+                    bestPoints = currentPoints;
+                    bestSets = [...found];
+                }
+                for (let si = start; si < allSets.length; si++) {
+                    const setCards = allSets[si];
+                    if (setCards.some(c => used.has(c))) continue;
+                    let setPoints = 0;
+                    const a = setCards[0], b = setCards[1], c = setCards[2];
+                    if (a.ingredient === b.ingredient && b.ingredient === c.ingredient) {
+                        setPoints = 120;
+                    } else {
+                        setPoints = 60;
+                    }
+                    for (const card of setCards) used.add(card);
+                    found.push([setCards, setPoints]);
+                    scoreBacktrack(si + 1, found, currentPoints + setPoints);
+                    found.pop();
+                    for (const card of setCards) used.delete(card);
+                }
+            }
+            scoreBacktrack(0, [], 0);
+            p.score = bestPoints;
+            p.sets = bestSets.map(s => s[0]);
+        }
+    }
+
     handleWin(player) {
         const cards = player.getAllCards();
         player.won = true;
+        this.calculateScores();
         let isMyPlayer = false;
         if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
             isMyPlayer = this.networkSession.game.state.players[this.networkSession.localPlayerIndex] === player;
@@ -1707,7 +1762,7 @@ class Game {
                 this.gameCtx.font = '16px Arial';
                 this.gameCtx.fillStyle = p.won ? '#ffd700' : '#ccc';
                 const setInfo = p.sets.length > 0 ? ` (${p.sets.length} sets)` : '';
-                this.gameCtx.fillText(`${p.name}: ${p.hand.length} cards${setInfo}`, HOTPOT.WIDTH / 2, y);
+                this.gameCtx.fillText(`${p.name}: ${p.score} points${setInfo}`, HOTPOT.WIDTH / 2, y);
                 y += 30;
             }
         }
