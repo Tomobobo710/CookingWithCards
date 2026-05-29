@@ -1118,6 +1118,12 @@ class HotpotNetworkSession {
     handleHostLeft(message) {
         if (this.networkManager.isCurrentUserHost()) return;
 
+        // Stop sync immediately — prevents remoteUpdated from firing and
+        // corrupting player state while the render loop is still running.
+        if (this.syncSystem) {
+            this.syncSystem.stop();
+        }
+
         // Host left — show room shutdown screen
         this.game.gameState = "roomShutDown";
         this.game.roomShutDownMenu.selectedIndex = 0;

@@ -67,9 +67,14 @@ class HotpotActionNetInputManager {
     }
 
     onLeftRoom(roomName) {
+        // If the network session is still alive when we receive leftRoom, it means
+        // the host disconnected and hostLeft is about to fire — let that handler
+        // transition to the roomShutDown screen instead.  If we clear state here,
+        // the render loop will crash because state.players becomes empty while the
+        // game table is still being drawn.
         if (this.game.networkSession) {
-            this.game.networkSession.cleanup();
-            this.game.networkSession = null;
+            // Don't clear state here — hostLeft or disconnected handler will take over.
+            return;
         }
         this.game.clearGameState();
         this.game.gameState = "multiplayerLogin";
