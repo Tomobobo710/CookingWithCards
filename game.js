@@ -136,12 +136,12 @@ class Game {
         }
     }
 
-    setupPlayers(count) {
+ setupPlayers(count) {
         const n = count || 4;
         this.state.players = [];
-        this.state.players.push(new PlayerEntity(0, 'You', true));
+        this.state.players.push(new NetworkedPlayer(0, 'You', true));
         for (let i = 1; i < n; i++) {
-            this.state.players.push(new PlayerEntity(i, 'Bot ' + i, false, 1 + Math.floor(Math.random() * 3)));
+            this.state.players.push(new NetworkedPlayer(i, 'Bot ' + i, false, 1 + Math.floor(Math.random() * 3)));
         }
         this.playerCount = n;
     }

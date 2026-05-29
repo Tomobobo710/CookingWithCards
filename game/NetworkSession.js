@@ -238,8 +238,8 @@ class HotpotNetworkSession {
                 const playerSlots = [];
                 for (let i = 1; i < this.game.state.players.length; i++) {
                     const p = this.game.state.players[i];
-                    if (p.isRemote && p.username) {
-                        playerSlots.push({ username: p.username, playerIndex: i });
+  if (p.isRemote && p.username) {
+                        playerSlots.push({ username: p.username, playerNumber: p.playerNumber, isHuman: p.isHuman });
                     }
                 }
  
@@ -272,7 +272,9 @@ class HotpotNetworkSession {
             const sourceId = "player_" + i;
 
             this.syncSystem.register(sourceId, {
-                getFields: () => ({
+getFields: () => ({
+                    playerNumber: player.playerNumber ?? player.id,
+                    isHuman: player.isHuman,
                     hand: player.hand.map(c => ({ category: c.category, ingredient: c.ingredient })),
                     drawnCard: player.drawnCard ? { category: player.drawnCard.category, ingredient: player.drawnCard.ingredient } : null,
                     discardPile: player.discardPile.map(c => ({ category: c.category, ingredient: c.ingredient })),
@@ -281,7 +283,6 @@ class HotpotNetworkSession {
                     score: player.score,
                     turnCount: player.turnCount,
                     turnTimer: player.turnTimer,
-                    isRemote: player.isRemote || false,
                     username: player.username || ''
                 })
             });
@@ -702,6 +703,10 @@ class HotpotNetworkSession {
         }
 
        // Sync every player_N source into the corresponding local player slot
+        // Each client derives isLocal/tablePosition from playerNumber + own username
+        const guestMyUsername = this.isHost ? null : this.game.gui.getUsername();
+
+        // First pass: sync identity and game data from host
         for (let i = 0; i < this.game.state.players.length; i++) {
             const sourceId = "player_" + i;
             const remoteData = this.syncSystem ? this.syncSystem.getRemote(sourceId) : null;
@@ -709,20 +714,20 @@ class HotpotNetworkSession {
 
             if (!remoteData) continue;
 
-            // Skip syncing our own player from remote — we own that data
-            if (localPlayer.isLocal) continue;
-
-            // Mark if this is a remote human
-            if (remoteData.isRemote) {
-                localPlayer.isRemote = true;
-            } else {
-                localPlayer.isRemote = false;
+            // Sync playerNumber from host
+            if (typeof remoteData.playerNumber === "number") {
+                localPlayer.playerNumber = remoteData.playerNumber;
             }
 
-            // Sync username
+            // Sync username and name
             if (remoteData.username) {
                 localPlayer.username = remoteData.username;
                 localPlayer.name = remoteData.username;
+            }
+
+            // Sync isHuman from host
+            if (typeof remoteData.isHuman === "boolean") {
+                localPlayer.isHuman = remoteData.isHuman;
             }
 
             // Sync hand cards
@@ -762,6 +767,29 @@ class HotpotNetworkSession {
             }
             if (typeof remoteData.won === "boolean") localPlayer.won = remoteData.won;
         }
+
+        // Second pass: derive isLocal and tablePosition per-client
+        // isLocal = player whose username matches this client's username
+        // tablePosition: S = local player, then W,N,E filled clockwise by playerNumber
+        const localPlayer = this.game.state.players.find(p => p.username === guestMyUsername && p.username !== '');
+        if (localPlayer) {
+            localPlayer.isLocal = true;
+            localPlayer.isRemote = false;
+            localPlayer.tablePosition = 'S';
+            this.localPlayerIndex = localPlayer.playerNumber;
+            const localNum = localPlayer.playerNumber;
+
+            // Assign positions: S=local, then W(local+1), N(local+2), E(local+3) mod 4
+            const positions = ['S', 'W', 'N', 'E'];
+            for (const p of this.game.state.players) {
+                const offset = ((p.playerNumber - localNum) % 4 + 4) % 4;
+                p.tablePosition = positions[offset];
+                if (offset !== 0) {
+                    p.isLocal = false;
+                    p.isRemote = true;
+                }
+            }
+        }
     }
 
     updateTurnTimer() {
@@ -785,31 +813,34 @@ class HotpotNetworkSession {
         const users = this.networkManager.getConnectedUsers();
         if (!users || users.length === 0) return;
 
-        const myUsername = this.game.gui.getUsername();
-
-        // Mark all players as non-local first
-        for (const p of this.game.state.players) {
-            p.isLocal = false;
+        // Reset all players
+        for (let i = 0; i < this.game.state.players.length; i++) {
+            const p = this.game.state.players[i];
+            p.playerNumber = i;
+            p.username = '';
+            p.name = '';
+            p.isHuman = false;
         }
 
-        // players[0] is always the local client
-        this.game.state.players[0].isLocal = true;
-
-        // Assign slots 1..N to non-host users from connected users list
-        let slot = 1;
+        // Map each connected user to a player slot
+        let slot = 0;
         for (const user of users) {
-            if (user.isHost) continue;
             if (slot >= this.game.state.players.length) break;
             const p = this.game.state.players[slot];
+            p.playerNumber = slot;
             p.username = user.username;
             p.name = user.username;
-            p.isRemote = true;
-            // If this user is me, mark as local
-            if (user.username === myUsername) {
-                p.isLocal = true;
-                this.localPlayerIndex = slot;
-            }
+            p.isHuman = true;  // real humans, not bots
             slot++;
+        }
+
+        // Fill remaining slots with bots
+        for (let i = slot; i < this.game.state.players.length; i++) {
+            const p = this.game.state.players[i];
+            p.playerNumber = i;
+            p.name = 'Bot ' + (i + 1);
+            p.username = 'Bot ' + (i + 1);
+            p.isHuman = false;
         }
     }
 
