@@ -134,7 +134,7 @@ class HotpotNetworkSession {
 
         // Create remote player placeholders (up to 3 remote players)
         this.remotePlayers = [];
-        const positions = ['S', 'E', 'N', 'W'];
+        const positions = ['S', 'W', 'N', 'E'];
         const maxRemote = 3;
         for (let i = 0; i < maxRemote; i++) {
             const remotePlayer = new (this.game.state.players[0].constructor)(

@@ -139,7 +139,7 @@ class Game {
  setupPlayers(count) {
         const n = count || 4;
         this.state.players = [];
-        const positions = ['S', 'E', 'N', 'W'];
+        const positions = ['S', 'W', 'N', 'E'];
         this.state.players.push(new NetworkedPlayer(0, 'You', true));
         this.state.players[0].playerNumber = 0;
         this.state.players[0].tablePosition = positions[0];
@@ -899,13 +899,13 @@ class Game {
 
         let cx, cy;
 
-        if (player.tablePosition === 'E') {
+        if (player.tablePosition === 'W') {
             cx = fw / 2 + 12 + fw + 8 + fw / 2;
             cy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * visualH) / 2;
         } else if (player.tablePosition === 'N') {
             cx = (HOTPOT.WIDTH - totalW) / 2 + (cards.length * visualW) / 2;
             cy = fh / 2 + 10 + fh + 8 + fh / 2;
-        } else if (player.tablePosition === 'W') {
+        } else if (player.tablePosition === 'E') {
             cx = HOTPOT.WIDTH - fw / 2 - 12 - fw - 8 - fw / 2;
             cy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * visualH) / 2;
         } else {
@@ -1296,8 +1296,8 @@ class Game {
         const localPlayer = this.state.players[localPlayerIndex];
           this.drawLocalPlayerHand(localPlayer);
 
-       // Remote players: position them around the table
-        // Fixed visual slots: left(E)=1, top(N)=2, right(W)=3
+        // Remote players: position them around the table
+        // Fixed visual slots: left(W)=1, top(N)=2, right(E)=3
         // Players fill slots in turn order, starting from the slot after local player (clockwise)
         const visualSlots = [1, 2, 3]; // left, top, right
         let slotIdx = 0;
