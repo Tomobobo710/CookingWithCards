@@ -355,7 +355,8 @@ class Game {
 
         if (this.gameState === 'onlineMultiplayer' && this.networkSession && !this.networkSession.isHost) {
             const localPlayer = this.networkSession.game.state.players[this.networkSession.localPlayerIndex];
-            if (localPlayer && localPlayer.isHuman) {
+            const isMyTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+            if (localPlayer && localPlayer.isHuman && isMyTurn) {
                 if (this.turnPhase === 'draw') {
                     this.handleHumanDrawForPlayer(localPlayer);
                 } else if (this.turnPhase === 'discard') {
@@ -1139,7 +1140,13 @@ class Game {
             this.drawGameOver();
         } else {
             this.drawTurnInfo(currentPlayer);
-            if (currentPlayer && currentPlayer.isHuman) {
+            let isLocalTurn = false;
+            if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+                isLocalTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+            } else {
+                isLocalTurn = currentPlayer && currentPlayer.isHuman;
+            }
+            if (isLocalTurn) {
                 this.drawHumanPrompt(currentPlayer);
             }
         }
@@ -1406,23 +1413,30 @@ class Game {
     drawTurnInfo(currentPlayer) {
         if (!currentPlayer) return;
 
-        const label = currentPlayer.isHuman ? 'YOUR TURN' : `${currentPlayer.name}'s TURN`;
+        let isMyTurn = false;
+        if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+            isMyTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+        } else {
+            isMyTurn = currentPlayer.isHuman;
+        }
+
+        const label = isMyTurn ? 'YOUR TURN' : `${currentPlayer.name}'s TURN`;
         this.gameCtx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
         this.gameCtx.font = 'bold 16px Arial';
         this.gameCtx.textAlign = 'center';
         this.gameCtx.fillText(label, HOTPOT.WIDTH / 2, this.msgY);
 
-        if (currentPlayer.isHuman && this.turnPhase === 'draw') {
+        if (isMyTurn && this.turnPhase === 'draw') {
             this.gameCtx.fillStyle = '#ffcc66';
             this.gameCtx.font = '13px Arial';
             this.gameCtx.fillText('Click the deck to draw, or click an opponent\'s discard pile to steal', HOTPOT.WIDTH / 2, this.msgY + 20);
-        } else if (currentPlayer.isHuman && this.turnPhase === 'discard') {
+        } else if (isMyTurn && this.turnPhase === 'discard') {
             this.gameCtx.fillStyle = '#ffcc66';
             this.gameCtx.font = '13px Arial';
             this.gameCtx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, this.msgY + 20);
         }
 
-        if (currentPlayer.isHuman && this.networkSession && this.turnPhase === 'discard') {
+        if (isMyTurn && this.networkSession && this.turnPhase === 'discard') {
             const turnTimer = currentPlayer.turnTimer || 0;
             const remaining = Math.max(0, Math.ceil(60 - turnTimer));
             this.gameCtx.fillStyle = remaining <= 10 ? '#ff6b6b' : '#ffcc66';
@@ -1430,7 +1444,7 @@ class Game {
             this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.msgY + 40);
         }
 
-        if (!currentPlayer.isHuman && this.networkSession) {
+        if (!isMyTurn && this.networkSession) {
             const turnTimer = currentPlayer.turnTimer || 0;
             const remaining = Math.max(0, Math.ceil(60 - turnTimer));
             this.gameCtx.fillStyle = remaining <= 10 ? '#ff6b6b' : '#ffcc66';
@@ -1439,7 +1453,7 @@ class Game {
             this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.msgY + 40);
         }
 
-        if (currentPlayer.isHuman && this.turnPhase === 'discard' && this.state.canWin(this.state.players[0])) {
+        if (isMyTurn && this.turnPhase === 'discard' && this.state.canWin(this.state.players[0])) {
             this.eatButton.hovered = this.input.isElementHovered('eat_button');
             const btn = this.eatButton;
             this.gameCtx.fillStyle = btn.hovered ? '#43a047' : '#2e7d32';
