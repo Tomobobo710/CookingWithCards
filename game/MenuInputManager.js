@@ -107,53 +107,7 @@ class HotpotMenuInputManager {
         }
     }
 
-    handleLocalMultiplayerMenuInput() {
-        const menu = this.game.menuManager.localMultiplayerMenu;
-        if (!menu.buttonsRegistered) {
-            this.registerLocalMultiplayerMenuButtons();
-            this.snapToHover(menu);
-        }
-
-        const maxIndex = menu.buttons.length - 1;
-
-        for (let i = 0; i < menu.buttons.length; i++) {
-            if (this.input.isElementJustPressed(`hotpot_local_mp_button_${i}`)) {
-                this.executeAction(menu.buttons[i].action);
-                return;
-            }
-        }
-
-        for (let i = 0; i < menu.buttons.length; i++) {
-            if (this.input.isElementHovered(`hotpot_local_mp_button_${i}`)) {
-                if (menu.selectedIndex !== i) { menu.selectedIndex = i; }
-                break;
-            }
-        }
-
-        if (this.input.isLeftMouseButtonJustPressed()) {
-            const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 220, spacing = 75;
-            for (let i = 0; i < menu.buttons.length; i++) {
-                const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
-                const y = startY + i * spacing;
-                if (pointer.x >= x && pointer.x <= x + buttonWidth && pointer.y >= y && pointer.y <= y + buttonHeight) {
-                    this.executeAction(menu.buttons[i].action);
-                    return;
-                }
-            }
-        }
-
-        if (this.isDirUp()) { menu.selectedIndex = Math.max(0, menu.selectedIndex - 1); }
-        if (this.isDirDown()) { menu.selectedIndex = Math.min(maxIndex, menu.selectedIndex + 1); }
-
-        if (this.isBack()) { this.executeAction("back"); return; }
-
-        if (this.isConfirm()) {
-            this.executeAction(menu.buttons[menu.selectedIndex].action);
-        }
-    }
-
-    handleGameOverMenuInput() {
+   handleGameOverMenuInput() {
         const isOnline = !!this.game.networkSession;
         const menu = this.game.menuManager.getGameOverMenu(isOnline);
         if (!menu.buttonsRegistered) {
@@ -217,22 +171,14 @@ class HotpotMenuInputManager {
                 g.multiplayerMenu.buttonsRegistered = false;
                 break;
 
-            case "localMultiplayer":
-                g.menuStack.current = "localMultiplayer";
-                g.menuStack.previous = "multiplayer";
-                this.unregisterMultiplayerMenuButtons();
-                g.localMultiplayerMenu.selectedIndex = 0;
-                g.localMultiplayerMenu.buttonsRegistered = false;
-                break;
-
-            case "onlineMultiplayer":
+          case "onlineMultiplayer":
                 g.gameState = "multiplayerLogin";
                 g.menuStack.previous = "multiplayer";
                 g.menuStack.current = null;
                 this.unregisterMultiplayerMenuButtons();
                 break;
 
-            case "back": {
+    case "back": {
                 // Determine where to go back to
                 const current = g.menuStack.current;
                 if (current === "multiplayer") {
@@ -241,30 +187,9 @@ class HotpotMenuInputManager {
                     this.unregisterMultiplayerMenuButtons();
                     g.multiplayerMenu.selectedIndex = 0;
                     g.multiplayerMenu.buttonsRegistered = false;
-                } else if (current === "localMultiplayer") {
-                    g.menuStack.current = "multiplayer";
-                    g.menuStack.previous = "main";
-                    this.unregisterLocalMultiplayerMenuButtons();
-                    g.localMultiplayerMenu.selectedIndex = 0;
-                    g.localMultiplayerMenu.buttonsRegistered = false;
                 }
                 break;
             }
-
-            case "startTwoPlayer":
-                g.startLocalMultiplayer(2);
-                this.unregisterLocalMultiplayerMenuButtons();
-                break;
-
-            case "startThreePlayer":
-                g.startLocalMultiplayer(3);
-                this.unregisterLocalMultiplayerMenuButtons();
-                break;
-
-            case "startFourPlayer":
-                g.startLocalMultiplayer(4);
-                this.unregisterLocalMultiplayerMenuButtons();
-                break;
 
             case "playAgain":
                 // Single player or local multiplayer restart
@@ -384,19 +309,6 @@ class HotpotMenuInputManager {
         this.game.multiplayerMenu.buttonsRegistered = true;
     }
 
-    registerLocalMultiplayerMenuButtons() {
-        if (this.game.localMultiplayerMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 220, spacing = 75;
-        this.game.localMultiplayerMenu.buttons.forEach((button, index) => {
-            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
-            const y = startY + index * spacing;
-            this.input.registerElement(`hotpot_local_mp_button_${index}`, {
-                bounds: () => ({ x, y, width: buttonWidth, height: buttonHeight })
-            });
-        });
-        this.game.localMultiplayerMenu.buttonsRegistered = true;
-    }
-
     registerGameOverMenuButtons() {
         const isOnline = !!this.game.networkSession;
         const menu = isOnline ? this.game.onlineGameOverMenu : this.game.gameOverMenu;
@@ -420,11 +332,6 @@ class HotpotMenuInputManager {
     unregisterMultiplayerMenuButtons() {
         if (!this.game.multiplayerMenu.buttonsRegistered) return;
         this.game.multiplayerMenu.buttonsRegistered = false;
-    }
-
-    unregisterLocalMultiplayerMenuButtons() {
-        if (!this.game.localMultiplayerMenu.buttonsRegistered) return;
-        this.game.localMultiplayerMenu.buttonsRegistered = false;
     }
 
     unregisterGameOverMenuButtons() {

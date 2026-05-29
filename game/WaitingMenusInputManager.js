@@ -244,24 +244,29 @@ class HotpotWaitingMenusInputManager {
         const g = this.game;
 
         switch (action) {
+            case "start":
+                if (g.networkSession) {
+                    g.networkSession.hostWaiting = true;
+                    g.networkSession.startCountdown();
+                }
+                break;
+
             case "cancelWaiting":
                 this.unregisterWaitingMenuButtons();
                 g.gameState = "waitingCanceledMenu";
                 g.waitingCanceledMenu.selectedIndex = 0;
                 g.waitingCanceledMenu.buttonsRegistered = false;
                 if (g.networkSession) {
-                    g.networkSession.hostWaiting = false;
-                    g.networkSession.state = "HOST_NOT_READY";
+                    g.networkSession.state = "CANCELLED";
                 }
                 break;
 
-            case "keepWaiting":
+             case "keepWaiting":
                 this.unregisterWaitingCanceledMenuButtons();
                 g.gameState = "waitingMenu";
                 g.waitingMenu.selectedIndex = 0;
                 g.waitingMenu.buttonsRegistered = false;
                 if (g.networkSession) {
-                    g.networkSession.hostWaiting = true;
                     g.networkSession.state = "WAITING";
                 }
                 break;

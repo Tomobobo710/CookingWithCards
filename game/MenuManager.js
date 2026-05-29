@@ -18,19 +18,7 @@ class HotpotMenuManager {
         this.multiplayerMenu = {
             selectedIndex: 0,
             buttons: [
-                { text: "LOCAL", action: "localMultiplayer" },
                 { text: "ONLINE", action: "onlineMultiplayer" },
-                { text: "BACK", action: "back" }
-            ],
-            buttonsRegistered: false
-        };
-
-        this.localMultiplayerMenu = {
-            selectedIndex: 0,
-            buttons: [
-                { text: "2-PLAYER", action: "startTwoPlayer" },
-                { text: "3-PLAYER", action: "startThreePlayer" },
-                { text: "4-PLAYER", action: "startFourPlayer" },
                 { text: "BACK", action: "back" }
             ],
             buttonsRegistered: false
@@ -62,7 +50,10 @@ class HotpotMenuManager {
 
         this.waitingMenu = {
             selectedIndex: 0,
-            buttons: [{ text: "CANCEL", action: "cancelWaiting" }],
+            buttons: [
+                { text: "START", action: "start" },
+                { text: "CANCEL", action: "cancelWaiting" }
+            ],
             buttonsRegistered: false
         };
 
@@ -99,7 +90,7 @@ class HotpotMenuManager {
 
     getMainMenu() { return this.mainMenu; }
     getMultiplayerMenu() { return this.multiplayerMenu; }
-    getLocalMultiplayerMenu() { return this.localMultiplayerMenu; }
+    
     getGameOverMenu(isOnline) { return isOnline ? this.onlineGameOverMenu : this.gameOverMenu; }
     getRematchPendingMenu() { return this.rematchPendingMenu; }
     getWaitingMenu() { return this.waitingMenu; }

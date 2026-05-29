@@ -34,7 +34,7 @@ const HOTPOT = {
         UI_BG: 'rgba(40, 20, 10, 0.9)',
         UI_BORDER: '#8b4513',
         TEXT: '#f5deb3',
-        HIGHLIGHT: '#ffd700',
+        HIGHLIGHT: '#8B4513',
         SET_COMPLETED: '#90ee90',
         CARD_BG: '#fff8dc',
         PLAYER_PANEL: 'rgba(60, 30, 15, 0.8)',
@@ -310,6 +310,15 @@ class Game {
         this.settingsButtons = [];
         this.msgY = 110;
 
+        // Countdown overlay (used by online multiplayer)
+        this.countdown = {
+            active: false,
+            timer: 0,
+            phase: "waiting",
+            countdownNumber: 3,
+            waitingForOpponent: false
+        };
+
         // Menu system
         this.menuStack = { current: null, previous: null };
         this.menuManager = new HotpotMenuManager(this);
@@ -318,8 +327,27 @@ class Game {
 
         // Online multiplayer
         this.gui = null;
+        this.networkManager = null;
         this.networkSession = null;
+        this.actionNetInputManager = null;
         this.playerCount = 4; // default for local multiplayer
+        this.suppressNextFrameMenuNavigate = false;
+        this.skipMenuNavigateSound = false;
+
+        // Initialize ActionNetManagerGUI for online multiplayer (P2P)
+        this.gui = new ActionNetManagerGUI(canvases, input, audio, {
+            mode: 'p2p',
+            p2pConfig: {
+                gameId: 'hotpot-game-001',
+                maxPlayers: 4,
+                debug: false
+            }
+        });
+        this.networkManager = this.gui.getNetManager();
+
+        // Wire up ActionNetInputManager to connect GUI events to game
+        this.actionNetInputManager = new HotpotActionNetInputManager(this, input);
+        this.actionNetInputManager.wireGUIEvents();
 
         // Menu button references (used in rendering)
         this.menuButton = { id: 'menu_button', x: 300, y: 300, width: 200, height: 60, hovered: false };
@@ -345,7 +373,6 @@ class Game {
         // Aliases for MenuInputManager
         this.mainMenu = this.menuManager.mainMenu;
         this.multiplayerMenu = this.menuManager.multiplayerMenu;
-        this.localMultiplayerMenu = this.menuManager.localMultiplayerMenu;
         this.gameOverMenu = this.menuManager.gameOverMenu;
         this.onlineGameOverMenu = this.menuManager.onlineGameOverMenu;
         this.rematchPendingMenu = this.menuManager.rematchPendingMenu;
@@ -452,11 +479,6 @@ class Game {
         this.gameState = 'playing';
     }
 
-    startLocalMultiplayer(count) {
-        this.startGame(count);
-        this.gameState = 'playing';
-    }
-
     clearGameState() {
         this.state.reset();
         this.turnPhase = 'draw';
@@ -486,6 +508,10 @@ class Game {
 
         if (this.gameState === 'playing') {
             this.updateGameLogic(dt);
+        }
+
+        if ((this.gameState === 'onlineMultiplayer' || this.gameState === 'rematchPending' || this.gameState === 'waitingMenu') && this.networkSession) {
+            this.networkSession.update(dt);
         }
 
         if (this.gameState === 'gameOver' && !this._botRevealed) {
@@ -552,18 +578,13 @@ class Game {
         }
 
         // Menu navigation
-        if (this.gameState === 'menu') {
-            this.menuInputManager.handleMainMenuInput();
-            return;
-        }
-
         if (this.menuStack.current === 'multiplayer') {
             this.menuInputManager.handleMultiplayerMenuInput();
             return;
         }
 
-        if (this.menuStack.current === 'localMultiplayer') {
-            this.menuInputManager.handleLocalMultiplayerMenuInput();
+      if (this.gameState === 'menu') {
+            this.menuInputManager.handleMainMenuInput();
             return;
         }
 
@@ -603,7 +624,7 @@ class Game {
             return;
         }
 
-        if (this.gameState === 'playing') {
+        if (this.gameState === 'playing' || this.gameState === 'onlineMultiplayer') {
             const player = this.state.getCurrentPlayer();
             if (player.isHuman) {
                 if (this.turnPhase === 'draw') {
@@ -622,7 +643,7 @@ class Game {
         const pointer = this.input.getPointerPosition();
 
         const deckRect = this.getDeckRect();
-        if (this.pointInRect(pointer, deckRect) && this.state.deck.length > 0) {
+        if (this.pointInRect(pointer, deckRect)) {
             const card = this.state.deck[this.state.deck.length - 1];
             this.applySpeedToCard(card);
             const drawnRect = this.getDrawnCardRect(player);
@@ -684,8 +705,9 @@ class Game {
 
         for (let i = 0; i < player.hand.length; i++) {
             if (this.pointInRect(pointer, handCards[i])) {
-                this.applySpeedToCard(player.hand[i]);
-                this.state.discardCard(player, player.hand[i]);
+                const card = player.hand[i];
+                this.applySpeedToCard(card);
+                this.state.discardCard(player, card);
                 this.audio.play('discard', { volume: 0.3 });
                 this.endTurn();
                 return;
@@ -695,8 +717,9 @@ class Game {
         if (player.drawnCard) {
             const drawnRect = this.getDrawnCardRect();
             if (this.pointInRect(pointer, drawnRect)) {
-                this.applySpeedToCard(player.drawnCard);
-                this.state.discardCard(player, player.drawnCard);
+                const card = player.drawnCard;
+                this.applySpeedToCard(card);
+                this.state.discardCard(player, card);
                 this.audio.play('discard', { volume: 0.3 });
                 this.endTurn();
             }
@@ -705,15 +728,24 @@ class Game {
 
     handleWin(player) {
         const cards = player.getAllCards();
-        this.state.gamePhase = 'gameOver';
-        this.gameState = 'gameOver';
         player.won = true;
         this.state.message = player.isHuman ? 'You win!' : `${player.name} wins!`;
         this.audio.play('win', { volume: 0.7 });
+
+        // End the game (we're always the host as player 0)
+        if (this.networkSession) {
+            this.state.gamePhase = 'gameOver';
+            this.gameState = 'gameOver';
+            this.networkSession.endGame();
+        } else {
+            // Single player / local multiplayer
+            this.state.gamePhase = 'gameOver';
+            this.gameState = 'gameOver';
+        }
     }
 
     // ---------- Bot Logic ----------
-    updateGameLogic(dt) {
+     updateGameLogic(dt) {
         if (this.state.gamePhase === 'gameOver') {
             if (this.gameState !== 'gameOver') {
                 this.gameState = 'gameOver';
@@ -722,9 +754,18 @@ class Game {
             return;
         }
 
-        const player = this.state.getCurrentPlayer();
-        if (!player.isHuman) {
-            this.updateBotTurn(player);
+        // In online mode, skip bot AI for remote humans (they control their own turns)
+        // Bot players still use AI
+        if (this.networkSession && this.networkSession.isHost) {
+            const player = this.state.getCurrentPlayer();
+            if (!player.isHuman && !player.isRemote) {
+                this.updateBotTurn(player);
+            }
+        } else if (!this.networkSession) {
+            const player = this.state.getCurrentPlayer();
+            if (!player.isHuman) {
+                this.updateBotTurn(player);
+            }
         }
     }
 
@@ -806,12 +847,13 @@ class Game {
         } else if (this.state.deck.length > 0) {
             this.state.drawFromDeck(player);
             this.applySpeedToCard(player.drawnCard);
-        } else if (bestStealTarget) {
-            this.state.drawFromDiscard(player, bestStealTarget);
-            this.applySpeedToCard(player.drawnCard);
         } else {
-            this.endTurn();
-            return;
+            this.state.drawFromDeck(player);
+            if (!player.drawnCard) {
+                this.endTurn();
+                return;
+            }
+            this.applySpeedToCard(player.drawnCard);
         }
 
         this.audio.play('draw', { volume: 0.2 });
@@ -984,10 +1026,35 @@ class Game {
         this.gameCtx.fillStyle = HOTPOT.COLORS.BACKGROUND;
         this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
 
-        if (this.gameState === 'menu') {
-            this.drawMenuScreen();
+        if (this.gameState === 'menu' || this.menuStack.current === 'multiplayer') {
+            if (this.menuStack.current === 'multiplayer') {
+                this.drawMultiplayerMenuScreen();
+         } else {
+                this.drawMenuScreen();
+            }
         } else if (this.gameState === 'playing' || this.gameState === 'gameOver') {
             this.drawGameTable();
+        } else if (this.gameState === 'onlineMultiplayer') {
+            this.drawGameTable();
+         } else if (this.gameState === 'waitingMenu') {
+            this.drawGameTable();
+            const userCount = this.networkManager ? this.networkManager.getConnectedUsers().length : 0;
+            this.drawWaitingMenuScreen('WAITING FOR PLAYERS (' + userCount + '/4)');
+        } else if (this.gameState === 'waitingCanceledMenu') {
+            this.drawGameTable();
+            this.drawWaitingCanceledMenuScreen();
+        } else if (this.gameState === 'waitingForHostMenu') {
+            this.drawGameTable();
+            this.drawWaitingForHostMenuScreen();
+        } else if (this.gameState === 'opponentDisconnected') {
+            this.drawGameTable();
+            this.drawOpponentDisconnectedMenuScreen();
+        } else if (this.gameState === 'roomShutDown') {
+            this.drawGameTable();
+            this.drawRoomShutDownMenuScreen();
+        } else if (this.gameState === 'rematchPending') {
+            this.drawGameTable();
+            this.drawRematchPendingMenuScreen();
         }
         // multiplayerLogin: GUI canvas handles rendering
     }
@@ -1061,33 +1128,8 @@ class Game {
         }
     }
 
-    drawLocalMultiplayerMenuScreen() {
-        const menu = this.menuManager.localMultiplayerMenu;
-        const buttonWidth = 240, buttonHeight = 60, startY = 220, spacing = 75;
-
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 36px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText('LOCAL MULTIPLAYER', HOTPOT.WIDTH / 2, 150);
-
-        for (let i = 0; i < menu.buttons.length; i++) {
-            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
-            const y = startY + i * spacing;
-            const isHovered = this.input.isElementHovered(`hotpot_local_mp_button_${i}`);
-            const isSelected = menu.selectedIndex === i;
-
-            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
-            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
-            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-            this.gameCtx.lineWidth = 3;
-            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
-            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-            this.gameCtx.font = 'bold 24px Arial';
-            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 8);
-        }
-    }
-
-    drawWaitingMenuScreen(title) {
+ 
+     drawWaitingMenuScreen(title) {
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 36px Arial';
         this.gameCtx.textAlign = 'center';
@@ -1096,6 +1138,174 @@ class Game {
         this.gameCtx.font = '18px Arial';
         this.gameCtx.fillStyle = '#cccccc';
         this.gameCtx.fillText('Waiting for other players...', HOTPOT.WIDTH / 2, 250);
+
+        const menu = this.waitingMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 380, spacing = 75;
+        for (let i = 0; i < menu.buttons.length; i++) {
+            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+            const y = startY + i * spacing;
+            const isHovered = this.input.isElementHovered(`hotpot_waiting_button_${i}`);
+            const isSelected = menu.selectedIndex === i;
+            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.gameCtx.lineWidth = 3;
+            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.gameCtx.font = 'bold 20px Arial';
+            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
+        }
+    }
+
+    drawWaitingCanceledMenuScreen() {
+        this.gameCtx.fillStyle = 'rgba(0,0,0,0.75)';
+        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 36px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('MATCH CANCELED', HOTPOT.WIDTH / 2, 200);
+
+        this.gameCtx.font = '18px Arial';
+        this.gameCtx.fillStyle = '#cccccc';
+        this.gameCtx.fillText('The room is still open. What would you like to do?', HOTPOT.WIDTH / 2, 250);
+
+        const menu = this.waitingCanceledMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 300, spacing = 75;
+        for (let i = 0; i < menu.buttons.length; i++) {
+            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+            const y = startY + i * spacing;
+            const isHovered = this.input.isElementHovered(`hotpot_waitcancel_button_${i}`);
+            const isSelected = menu.selectedIndex === i;
+            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.gameCtx.lineWidth = 3;
+            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.gameCtx.font = 'bold 20px Arial';
+            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
+        }
+    }
+
+    drawWaitingForHostMenuScreen() {
+        this.gameCtx.fillStyle = 'rgba(0,0,0,0.75)';
+        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+
+        this.gameCtx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
+        this.gameCtx.font = 'bold 36px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('WAITING FOR HOST', HOTPOT.WIDTH / 2, 250);
+
+        this.gameCtx.font = '18px Arial';
+        this.gameCtx.fillStyle = '#cccccc';
+        this.gameCtx.fillText('The host needs to start the match', HOTPOT.WIDTH / 2, 300);
+
+        const menu = this.waitingForHostMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 380;
+        const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+        const y = startY;
+        const isHovered = this.input.isElementHovered('hotpot_waithost_button_0');
+        const isSelected = menu.selectedIndex === 0;
+        this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+        this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.lineWidth = 3;
+        this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 20px Arial';
+        this.gameCtx.fillText(menu.buttons[0].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
+    }
+
+    drawOpponentDisconnectedMenuScreen() {
+        this.gameCtx.fillStyle = 'rgba(0,0,0,0.75)';
+        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+
+        this.gameCtx.fillStyle = '#ff6b6b';
+        this.gameCtx.font = 'bold 36px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('OPPONENT DISCONNECTED', HOTPOT.WIDTH / 2, 200);
+
+        this.gameCtx.font = '18px Arial';
+        this.gameCtx.fillStyle = '#cccccc';
+        this.gameCtx.fillText('An opponent has left the game.', HOTPOT.WIDTH / 2, 250);
+
+        const menu = this.opponentDisconnectedMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 300, spacing = 75;
+        for (let i = 0; i < menu.buttons.length; i++) {
+            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+            const y = startY + i * spacing;
+            const isHovered = this.input.isElementHovered(`hotpot_disconnect_button_${i}`);
+            const isSelected = menu.selectedIndex === i;
+            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.gameCtx.lineWidth = 3;
+            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.gameCtx.font = 'bold 20px Arial';
+            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
+        }
+    }
+
+    drawRoomShutDownMenuScreen() {
+        this.gameCtx.fillStyle = 'rgba(0,0,0,0.75)';
+        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+
+        this.gameCtx.fillStyle = '#ff6b6b';
+        this.gameCtx.font = 'bold 36px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('ROOM SHUTDOWN', HOTPOT.WIDTH / 2, 250);
+
+        this.gameCtx.font = '18px Arial';
+        this.gameCtx.fillStyle = '#cccccc';
+        this.gameCtx.fillText('The host has left the room.', HOTPOT.WIDTH / 2, 300);
+
+        const menu = this.roomShutDownMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 340;
+        const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+        const y = startY;
+        const isHovered = this.input.isElementHovered('hotpot_roomshutdown_button_0');
+        const isSelected = menu.selectedIndex === 0;
+        this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+        this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.lineWidth = 3;
+        this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 20px Arial';
+        this.gameCtx.fillText(menu.buttons[0].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
+    }
+
+    drawRematchPendingMenuScreen() {
+        this.gameCtx.fillStyle = 'rgba(0,0,0,0.75)';
+        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 36px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('REMATCH PENDING', HOTPOT.WIDTH / 2, 200);
+
+        this.gameCtx.font = '18px Arial';
+        this.gameCtx.fillStyle = '#cccccc';
+        this.gameCtx.fillText('Waiting for opponent to accept...', HOTPOT.WIDTH / 2, 250);
+
+        const menu = this.rematchPendingMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 380, spacing = 75;
+        for (let i = 0; i < menu.buttons.length; i++) {
+            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+            const y = startY + i * spacing;
+            const isHovered = this.input.isElementHovered(`hotpot_rematch_button_${i}`);
+            const isSelected = menu.selectedIndex === i;
+            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.gameCtx.lineWidth = 3;
+            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.gameCtx.font = 'bold 20px Arial';
+            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
+        }
     }
 
     drawGameTable() {
@@ -1125,6 +1335,26 @@ class Game {
 
         if (this.state.messageTimer > 0) {
             this.drawMessage();
+        }
+
+        // Draw countdown overlay for online multiplayer
+        if (this.networkSession && this.countdown) {
+            const cd = this.countdown;
+            if (cd.active && cd.phase === 'countdown' && cd.countdownNumber) {
+                this.gameCtx.fillStyle = 'rgba(0,0,0,0.5)';
+                this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+                this.gameCtx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
+                this.gameCtx.font = 'bold 80px Arial';
+                this.gameCtx.textAlign = 'center';
+                this.gameCtx.fillText(cd.countdownNumber, HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2 + 25);
+            } else if (cd.active && cd.phase === 'go') {
+                this.gameCtx.fillStyle = 'rgba(0,0,0,0.5)';
+                this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+                this.gameCtx.fillStyle = '#90ee90';
+                this.gameCtx.font = 'bold 60px Arial';
+                this.gameCtx.textAlign = 'center';
+                this.gameCtx.fillText('LET\'S EAT!', HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2 + 20);
+            }
         }
     }
 
@@ -1313,7 +1543,7 @@ class Game {
         }
 
         const cfgLbl = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
-        const info = `${player.name} [${cfgLbl.desc}]`;
+        const info = player.isRemote ? player.name : `${player.name} [${cfgLbl.desc}]`;
         this.gameCtx.font = '10px Arial';
         this.gameCtx.textBaseline = 'middle';
         if (index === 1) {
@@ -1367,6 +1597,23 @@ class Game {
             this.gameCtx.fillStyle = '#ffcc66';
             this.gameCtx.font = '13px Arial';
             this.gameCtx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, this.msgY + 20);
+        }
+
+        if (currentPlayer.isHuman && this.networkSession && this.turnPhase === 'discard') {
+            const turnTimer = currentPlayer.turnTimer || 0;
+            const remaining = Math.max(0, Math.ceil(60 - turnTimer));
+            this.gameCtx.fillStyle = remaining <= 10 ? '#ff6b6b' : '#ffcc66';
+            this.gameCtx.font = 'bold 14px Arial';
+            this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.msgY + 40);
+        }
+
+        if (!currentPlayer.isHuman && this.networkSession) {
+            const turnTimer = currentPlayer.turnTimer || 0;
+            const remaining = Math.max(0, Math.ceil(60 - turnTimer));
+            this.gameCtx.fillStyle = remaining <= 10 ? '#ff6b6b' : '#ffcc66';
+            this.gameCtx.font = 'bold 14px Arial';
+            this.gameCtx.textAlign = 'center';
+            this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.msgY + 40);
         }
 
         if (currentPlayer.isHuman && this.turnPhase === 'discard' && this.state.canWin(this.state.players[0])) {
@@ -1450,6 +1697,11 @@ class Game {
 
     drawGUILayer() {
         this.guiCtx.clearRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+
+        // Let ActionNetManagerGUI draw login/lobby UI
+        if (this.gameState === 'multiplayerLogin' && this.gui) {
+            this.gui.action_draw();
+        }
     }
 
     drawDebugLayer() {
