@@ -309,6 +309,7 @@ class Game {
         this.settingsOpen = false;
         this.currentSpeed = parseInt(localStorage.getItem('hotpot_speed')) || 2;
         this.settingsButtons = [];
+        this.msgY = 110;
 
         this.setupPlayers();
         this.setupUI();
@@ -586,7 +587,7 @@ class Game {
         if (this.state.canWin(player)) {
             this.eatButton.hovered = this.input.isElementHovered('eat_button');
             if (this.input.isElementJustPressed('eat_button')) {
-                this.humanWin(player);
+                this.handleWin(player);
                 return;
             }
         }
@@ -614,12 +615,12 @@ class Game {
         }
     }
 
-    humanWin(player) {
+    handleWin(player) {
         const cards = player.getAllCards();
         this.state.gamePhase = 'gameOver';
         this.gameState = 'gameOver';
         player.won = true;
-        this.state.message = `${player.name} wins!`;
+        this.state.message = player.isHuman ? 'You win!' : `${player.name} wins!`;
         this.audio.play('win', { volume: 0.7 });
     }
 
@@ -739,11 +740,7 @@ class Game {
 
         // — Check win before discarding —
         if (this.state.canWin(player)) {
-            this.state.gamePhase = 'gameOver';
-            this.gameState = 'gameOver';
-            player.won = true;
-            this.state.message = `${player.name} wins!`;
-            this.audio.play('win', { volume: 0.7 });
+            this.handleWin(player);
             player.botStarted = false;
             return;
         }
@@ -835,18 +832,21 @@ class Game {
         return { x: cx - HOTPOT.UI.CARD_WIDTH / 2, y: cy - HOTPOT.UI.CARD_HEIGHT / 2, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
     }
 
-    getDiscardRect(playerIndex) {
-        // Equidistant NESW around screen center, 120px from center
+getDiscardRect(playerIndex) {
         const cx = HOTPOT.WIDTH / 2;
         const cy = HOTPOT.HEIGHT / 2;
-        const dist = 100;
+        const gap = 50;
         const hw = HOTPOT.UI.CARD_WIDTH / 2;
         const hh = HOTPOT.UI.CARD_HEIGHT / 2;
+
+        // Player 0 = bottom (South), Player 1 = left (West), Player 2 = top (North), Player 3 = right (East)
+        const distV = hh + gap;
+        const distH = hw + gap / 2 + 12.5;
         const positions = [
-            { x: cx - hw, y: cy + dist - hh },  // South — human
-            { x: cx - dist - hw, y: cy - hh },   // West  — bot 1
-            { x: cx - hw, y: cy - dist - hh },   // North — bot 2
-            { x: cx + dist - hw, y: cy - hh }    // East  — bot 3
+            { x: cx - hw, y: cy + distV - hh },  // South — player 0 (bottom)
+            { x: cx - distH - hw, y: cy - hh },   // West  — player 1 (left)
+            { x: cx - hw, y: cy - distV - hh },   // North — player 2 (top)
+            { x: cx + distH - hw, y: cy - hh }    // East  — player 3 (right)
         ];
         const pos = positions[playerIndex];
         return { x: pos.x, y: pos.y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
@@ -973,7 +973,7 @@ class Game {
         if (this.gameState === 'gameOver') {
             this.drawGameOver();
         } else {
-            this.drawTurnInfo(currentPlayer);
+       this.drawTurnInfo(currentPlayer);
             if (currentPlayer && currentPlayer.isHuman) {
                 this.drawHumanPrompt(currentPlayer);
             }
@@ -1212,23 +1212,23 @@ class Game {
         this.gameCtx.textBaseline = 'alphabetic';
     }
 
-    drawTurnInfo(currentPlayer) {
+  drawTurnInfo(currentPlayer) {
         if (!currentPlayer) return;
 
         const label = currentPlayer.isHuman ? 'YOUR TURN' : `${currentPlayer.name}'s TURN`;
         this.gameCtx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
         this.gameCtx.font = 'bold 16px Arial';
         this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(label, HOTPOT.WIDTH / 2, 80);
+        this.gameCtx.fillText(label, HOTPOT.WIDTH / 2, this.msgY);
 
         if (currentPlayer.isHuman && this.turnPhase === 'draw') {
             this.gameCtx.fillStyle = '#ffcc66';
             this.gameCtx.font = '13px Arial';
-            this.gameCtx.fillText('Click the deck to draw, or click an opponent\'s discard pile to steal', HOTPOT.WIDTH / 2, 100);
+            this.gameCtx.fillText('Click the deck to draw, or click an opponent\'s discard pile to steal', HOTPOT.WIDTH / 2, this.msgY + 20);
         } else if (currentPlayer.isHuman && this.turnPhase === 'discard') {
             this.gameCtx.fillStyle = '#ffcc66';
             this.gameCtx.font = '13px Arial';
-            this.gameCtx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, 115);
+            this.gameCtx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, this.msgY + 20);
         }
 
         if (currentPlayer.isHuman && this.turnPhase === 'discard' && this.state.canWin(this.state.players[0])) {
@@ -1291,16 +1291,16 @@ class Game {
         this.gameCtx.fillText('PLAY AGAIN', btn.x + btn.width / 2, btn.y + btn.height / 2 + 7);
     }
 
-    drawMessage() {
+   drawMessage() {
         this.gameCtx.fillStyle = 'rgba(0,0,0,0.8)';
-        this.gameCtx.fillRect(150, 55, 500, 50);
+        this.gameCtx.fillRect(150, this.msgY, 500, 50);
         this.gameCtx.strokeStyle = HOTPOT.COLORS.HIGHLIGHT;
         this.gameCtx.lineWidth = 2;
-        this.gameCtx.strokeRect(150, 55, 500, 50);
+        this.gameCtx.strokeRect(150, this.msgY, 500, 50);
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 16px Arial';
         this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(this.state.message, HOTPOT.WIDTH / 2, 85);
+        this.gameCtx.fillText(this.state.message, HOTPOT.WIDTH / 2, this.msgY + 30);
     }
 
     drawGUILayer() {
