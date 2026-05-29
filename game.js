@@ -684,7 +684,7 @@ class Game {
         actingPlayer.hasDrawn = false;
 
         if (actingPlayer.drawnCard) {
-            if (!actingPlayer.isHuman) {
+           if (!actingPlayer.isHuman) {
                 const botIdx = this.state.players.indexOf(actingPlayer);
                 const ha = botIdx === 1 ? Math.PI / 2 : (botIdx === 2 ? Math.PI : -Math.PI / 2);
                 this.applySpeedToCard(actingPlayer.drawnCard);
@@ -1129,9 +1129,9 @@ class Game {
 
         // Render local player at bottom, remote players at other 3 positions
         const localPlayer = this.state.players[localPlayerIndex];
-        this.drawHumanHand(localPlayer, localPlayerIndex);
+          this.drawLocalPlayerHand(localPlayer);
 
-        // Remote players: position them around the table
+       // Remote players: position them around the table
         // Fixed visual slots: left(E)=1, top(N)=2, right(W)=3
         // Players fill slots in turn order, starting from the slot after local player (clockwise)
         const visualSlots = [1, 2, 3]; // left, top, right
@@ -1142,7 +1142,7 @@ class Game {
             if (remoteIdx >= this.state.players.length) continue;
             const p = this.state.players[remoteIdx];
             const visualPos = visualSlots[slotIdx % visualSlots.length];
-            this.drawBotHand(p, visualPos);
+             this.drawOtherPlayerHand(p, visualPos);
             slotIdx++;
         }
 
@@ -1275,12 +1275,13 @@ class Game {
         }
     }
 
-    drawHumanHand(player) {
+    drawLocalPlayerHand(player) {
         const handRects = this.getHandCardRects(0);
 
         for (let i = 0; i < player.hand.length; i++) {
             const card = player.hand[i];
             const rect = handRects[i];
+            card.scaleTo(HOTPOT.CARD_SCALE);
             card.moveTo(rect.x, rect.y);
             card.draw(this.gameCtx);
         }
@@ -1350,7 +1351,7 @@ class Game {
         }
     }
 
-    drawBotHand(player, index) {
+  drawOtherPlayerHand(player, index) {
         const cards = player.hand;
         if (cards.length === 0) return;
 

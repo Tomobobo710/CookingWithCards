@@ -737,11 +737,8 @@ getFields: () => ({
                 localPlayer.isHuman = remoteData.isHuman;
             }
 
-            // Sync hand cards (preserve card objects to keep positions/animations)
+             // Sync hand cards (preserve card objects to keep positions/animations)
             if (Array.isArray(remoteData.hand)) {
-                while (localPlayer.hand.length < remoteData.hand.length) {
-                    localPlayer.hand.push(new Card('', '', 0.375));
-                }
                 for (let j = 0; j < remoteData.hand.length; j++) {
                     const hc = remoteData.hand[j];
                     if (j < localPlayer.hand.length) {
@@ -757,7 +754,7 @@ getFields: () => ({
                             localPlayer.hand[j].frontColor = '#ffffff';
                         }
                     } else {
-                        localPlayer.hand[j] = new Card(hc.category, hc.ingredient, 0.375);
+                        localPlayer.hand[j] = new Card(hc.category, hc.ingredient, null, 0.375);
                     }
                 }
                 if (localPlayer.hand.length > remoteData.hand.length) {
@@ -768,7 +765,7 @@ getFields: () => ({
             // Sync drawn card (preserve object if possible)
             if (remoteData.drawnCard) {
                 if (!localPlayer.drawnCard) {
-                    localPlayer.drawnCard = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, 0.375);
+                    localPlayer.drawnCard = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, null, 0.375);
                 } else {
                     localPlayer.drawnCard.category = remoteData.drawnCard.category;
                     localPlayer.drawnCard.ingredient = remoteData.drawnCard.ingredient;
@@ -789,7 +786,7 @@ getFields: () => ({
             // Sync discard pile (preserve objects)
             if (Array.isArray(remoteData.discardPile)) {
                 while (localPlayer.discardPile.length < remoteData.discardPile.length) {
-                    localPlayer.discardPile.push(new Card('', '', 0.375));
+                    localPlayer.discardPile.push(new Card('', '', null, 0.375));
                 }
                 for (let j = 0; j < remoteData.discardPile.length; j++) {
                     const dc = remoteData.discardPile[j];
@@ -806,7 +803,7 @@ getFields: () => ({
                             localPlayer.discardPile[j].frontColor = '#ffffff';
                         }
                     } else {
-                        localPlayer.discardPile[j] = new Card(dc.category, dc.ingredient, 0.375);
+                        localPlayer.discardPile[j] = new Card(dc.category, dc.ingredient, null, 0.375);
                     }
                 }
                 if (localPlayer.discardPile.length > remoteData.discardPile.length) {
