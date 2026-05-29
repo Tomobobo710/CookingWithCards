@@ -1103,10 +1103,12 @@ class Game {
         this.drawDiscardPiles();
         this.drawSettingsButton();
 
-        // Find local player index (the one controlling this client)
+   // Find local player index (the one controlling this client)
         let localPlayerIndex = 0;
         if (this.networkSession) {
-            localPlayerIndex = this.networkSession.isHost ? 0 : (this.networkSession.localPlayerIndex >= 0 ? this.networkSession.localPlayerIndex : 0);
+            for (let i = 0; i < this.state.players.length; i++) {
+                if (this.state.players[i].isLocal) { localPlayerIndex = i; break; }
+            }
         } else {
             // Single player: player 0 is human
             for (let i = 0; i < this.state.players.length; i++) {
@@ -1285,10 +1287,15 @@ class Game {
             this.gameCtx.fillText('DRAWN', drawnRect.x + drawnRect.w / 2, drawnRect.y - 8);
         }
 
-        let playerLabel = '';
+   let playerLabel = '';
         if (this.networkSession) {
-            const idx = this.networkSession.isHost ? 0 : this.networkSession.localPlayerIndex;
-            playerLabel = player.name + "'s Hand (Player" + idx + ")";
+            for (let i = 0; i < this.state.players.length; i++) {
+                if (this.state.players[i] === player && this.state.players[i].isLocal) {
+                    playerLabel = player.name + "'s Hand (Player" + i + ")";
+                    break;
+                }
+            }
+            if (!playerLabel) playerLabel = player.name + "'s Hand";
         } else {
             playerLabel = player.name + "'s Hand";
         }
