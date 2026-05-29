@@ -191,6 +191,9 @@ class HotpotNetworkSession {
             player.score = 0;
             player.turnCount = 0;
             player.turnTimer = 0;
+            player.isLocal = false;
+            player.isRemote = false;
+            player.tablePosition = '';
         }
 
         // Reset game state
@@ -332,7 +335,7 @@ getFields: () => ({
                 if (!this.game._botRevealed) {
                     this.game._botRevealed = true;
                     for (const p of this.game.state.players) {
-                        if (p.isHuman) continue;
+                        if (p.isLocal) continue;
                         for (const card of p.hand) {
                             card.faceUp = false;
                             card.flip();
@@ -534,7 +537,7 @@ getFields: () => ({
         if (!this.game._botRevealed) {
             this.game._botRevealed = true;
             for (const p of this.game.state.players) {
-                if (p.isHuman) continue;
+                if (p.isLocal) continue;
                 for (const card of p.hand) {
                     card.faceUp = false;
                     card.flip();
@@ -730,28 +733,80 @@ getFields: () => ({
                 localPlayer.isHuman = remoteData.isHuman;
             }
 
-            // Sync hand cards
+            // Sync hand cards (preserve card objects to keep positions/animations)
             if (Array.isArray(remoteData.hand)) {
-                localPlayer.hand.length = 0;
-                for (const hc of remoteData.hand) {
-                    const card = new Card(hc.category, hc.ingredient, 0.375);
-                    localPlayer.hand.push(card);
+                while (localPlayer.hand.length < remoteData.hand.length) {
+                    localPlayer.hand.push(new Card('', '', 0.375));
+                }
+                for (let j = 0; j < remoteData.hand.length; j++) {
+                    const hc = remoteData.hand[j];
+                    if (j < localPlayer.hand.length) {
+                        localPlayer.hand[j].category = hc.category;
+                        localPlayer.hand[j].ingredient = hc.ingredient;
+                        localPlayer.hand[j].isHotpot = HOTPOT.CATEGORIES[hc.category] ? true : false;
+                        if (localPlayer.hand[j].isHotpot) {
+                            localPlayer.hand[j].frontColor = HOTPOT.CATEGORIES[hc.category].color;
+                            localPlayer.hand[j].suit = hc.category;
+                            localPlayer.hand[j].value = hc.ingredient;
+                            localPlayer.hand[j].textColor = '#000000';
+                        } else {
+                            localPlayer.hand[j].frontColor = '#ffffff';
+                        }
+                    } else {
+                        localPlayer.hand[j] = new Card(hc.category, hc.ingredient, 0.375);
+                    }
+                }
+                if (localPlayer.hand.length > remoteData.hand.length) {
+                    localPlayer.hand.length = remoteData.hand.length;
                 }
             }
 
-            // Sync drawn card
+            // Sync drawn card (preserve object if possible)
             if (remoteData.drawnCard) {
-                localPlayer.drawnCard = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, 0.375);
+                if (!localPlayer.drawnCard) {
+                    localPlayer.drawnCard = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, 0.375);
+                } else {
+                    localPlayer.drawnCard.category = remoteData.drawnCard.category;
+                    localPlayer.drawnCard.ingredient = remoteData.drawnCard.ingredient;
+                    localPlayer.drawnCard.isHotpot = HOTPOT.CATEGORIES[remoteData.drawnCard.category] ? true : false;
+                    if (localPlayer.drawnCard.isHotpot) {
+                        localPlayer.drawnCard.frontColor = HOTPOT.CATEGORIES[remoteData.drawnCard.category].color;
+                        localPlayer.drawnCard.suit = remoteData.drawnCard.category;
+                        localPlayer.drawnCard.value = remoteData.drawnCard.ingredient;
+                        localPlayer.drawnCard.textColor = '#000000';
+                    } else {
+                        localPlayer.drawnCard.frontColor = '#ffffff';
+                    }
+                }
             } else {
                 localPlayer.drawnCard = null;
             }
 
-            // Sync discard pile
+            // Sync discard pile (preserve objects)
             if (Array.isArray(remoteData.discardPile)) {
-                localPlayer.discardPile.length = 0;
-                for (const dc of remoteData.discardPile) {
-                    const card = new Card(dc.category, dc.ingredient, 0.375);
-                    localPlayer.discardPile.push(card);
+                while (localPlayer.discardPile.length < remoteData.discardPile.length) {
+                    localPlayer.discardPile.push(new Card('', '', 0.375));
+                }
+                for (let j = 0; j < remoteData.discardPile.length; j++) {
+                    const dc = remoteData.discardPile[j];
+                    if (j < localPlayer.discardPile.length) {
+                        localPlayer.discardPile[j].category = dc.category;
+                        localPlayer.discardPile[j].ingredient = dc.ingredient;
+                        localPlayer.discardPile[j].isHotpot = HOTPOT.CATEGORIES[dc.category] ? true : false;
+                        if (localPlayer.discardPile[j].isHotpot) {
+                            localPlayer.discardPile[j].frontColor = HOTPOT.CATEGORIES[dc.category].color;
+                            localPlayer.discardPile[j].suit = dc.category;
+                            localPlayer.discardPile[j].value = dc.ingredient;
+                            localPlayer.discardPile[j].textColor = '#000000';
+                        } else {
+                            localPlayer.discardPile[j].frontColor = '#ffffff';
+                        }
+                    } else {
+                        localPlayer.discardPile[j] = new Card(dc.category, dc.ingredient, 0.375);
+                    }
+                }
+                if (localPlayer.discardPile.length > remoteData.discardPile.length) {
+                    localPlayer.discardPile.length = remoteData.discardPile.length;
                 }
             }
 

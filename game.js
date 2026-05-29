@@ -234,8 +234,12 @@ class Game {
 
         if (this.gameState === 'gameOver' && !this._botRevealed) {
             this._botRevealed = true;
+            let skipLocal = false;
+            if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+                skipLocal = true;
+            }
             for (const p of this.state.players) {
-                if (p.isHuman) continue;
+                if (skipLocal && p.isLocal) continue;
                 for (const card of p.hand) {
                     card.faceUp = false;
                     card.flip();
@@ -518,7 +522,13 @@ class Game {
     handleWin(player) {
         const cards = player.getAllCards();
         player.won = true;
-        this.state.message = player.isHuman ? 'You win!' : `${player.name} wins!`;
+        let isMyPlayer = false;
+        if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+            isMyPlayer = this.networkSession.game.state.players[this.networkSession.localPlayerIndex] === player;
+        } else {
+            isMyPlayer = player.isHuman;
+        }
+        this.state.message = isMyPlayer ? 'You win!' : `${player.name} wins!`;
         this.audio.play('win', { volume: 0.7 });
 
         // End the game (we're always the host as player 0)
@@ -1179,7 +1189,13 @@ class Game {
     drawDeck() {
         const rect = this.getDeckRect();
         const player = this.state.getCurrentPlayer();
-        const isClickable = player && player.isHuman && this.turnPhase === 'draw' && this.state.deck.length > 0;
+        let isMyTurn = false;
+        if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+            isMyTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+        } else {
+            isMyTurn = player && player.isHuman;
+        }
+        const isClickable = isMyTurn && this.turnPhase === 'draw' && this.state.deck.length > 0;
 
         this.gameCtx.fillStyle = isClickable ? '#a00000' : HOTPOT.COLORS.DECK;
         this.gameCtx.fillRect(rect.x, rect.y, rect.w, rect.h);
@@ -1200,7 +1216,13 @@ class Game {
 
     drawDiscardPiles() {
         const player = this.state.getCurrentPlayer();
-        const isClickable = player && player.isHuman && this.turnPhase === 'draw';
+        let isMyTurn = false;
+        if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+            isMyTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+        } else {
+            isMyTurn = player && player.isHuman;
+        }
+        const isClickable = isMyTurn && this.turnPhase === 'draw';
 
         for (let i = 0; i < this.state.players.length; i++) {
             const p = this.state.players[i];
