@@ -55,15 +55,22 @@ const HOTPOT = {
         CENTER_Y: 220,
         PANEL_WIDTH: 170,
         PANEL_HEIGHT: 110
+    },
+
+    BOT_AI: {
+        1: { stealThreshold: 50, discardIndex: 1, desc: 'Easy' },
+        2: { stealThreshold: 20, discardIndex: 0, desc: 'Medium' },
+        3: { stealThreshold: -5, discardIndex: 0, desc: 'Hard' }
     }
 };
 
 // ---------- Player ----------
 class PlayerEntity {
-    constructor(id, name, isHuman) {
+    constructor(id, name, isHuman, difficulty = 2) {
         this.id = id;
         this.name = name;
         this.isHuman = isHuman;
+        this.difficulty = difficulty;
         this.hand = [];
         this.sets = [];
         this.discardPile = [];
@@ -71,6 +78,7 @@ class PlayerEntity {
         this.hasDrawn = false;
         this.drawnCard = null;
         this.score = 0;
+        this.turnCount = 0;
     }
 
     getAllCards() {
@@ -268,6 +276,7 @@ class Game {
         this.turnTimer = 0;
         this.bestSets = [];
         this._botRevealed = false;
+        this.debugEnabled = false;
 
         this.setupPlayers();
         this.setupUI();
@@ -280,9 +289,9 @@ class Game {
     setupPlayers() {
         this.state.players = [
             new PlayerEntity(0, 'You', true),
-            new PlayerEntity(1, 'Bot 1', false),
-            new PlayerEntity(2, 'Bot 2', false),
-            new PlayerEntity(3, 'Bot 3', false)
+            new PlayerEntity(1, 'Bot 1', false, 1 + Math.floor(Math.random() * 3)),
+            new PlayerEntity(2, 'Bot 2', false, 1 + Math.floor(Math.random() * 3)),
+            new PlayerEntity(3, 'Bot 3', false, 1 + Math.floor(Math.random() * 3))
         ];
     }
 
@@ -391,6 +400,10 @@ class Game {
 
     // ---------- Input ----------
     handleInput() {
+        if (this.input.isKeyJustPressed('ActionDebugToggle')) {
+            this.debugEnabled = !this.debugEnabled;
+        }
+
         if (this.gameState === 'menu') {
             this.menuButton.hovered = this.input.isElementHovered('menu_button');
             if (this.input.isElementJustPressed('menu_button')) {
@@ -529,6 +542,52 @@ class Game {
         }
     }
 
+    // — Bot Card Evaluation: returns how valuable this card is to the player (higher = keep) —
+    botCardValue(card, player) {
+        const allCards = player.getAllCards();
+
+        const ingCount = {};
+        const catDistinct = {};
+        const catCount = {};
+
+        for (const c of allCards) {
+            const ik = c.category + '|' + c.ingredient;
+            ingCount[ik] = (ingCount[ik] || 0) + 1;
+            catCount[c.category] = (catCount[c.category] || 0) + 1;
+            if (!catDistinct[c.category]) catDistinct[c.category] = new Set();
+            catDistinct[c.category].add(c.ingredient);
+        }
+
+        const ik = card.category + '|' + card.ingredient;
+        const ingTotal = ingCount[ik] || 0;
+        const catTotal = catCount[card.category] || 0;
+        const distinctTotal = catDistinct[card.category] ? catDistinct[card.category].size : 0;
+
+        let value = 0;
+
+        // Completes a triple (3 of same ingredient)
+        if (ingTotal >= 3) value += 200;
+        // One away from triple
+        else if (ingTotal === 2) value += 80;
+
+        // Completes a category set (3 distinct ingredients)
+        if (distinctTotal >= 3) value += 150;
+        // One away from category set
+        else if (distinctTotal === 2) value += 40;
+
+        // Category investment
+        if (catTotal >= 3) value += 20;
+        else if (catTotal === 2) value += 8;
+
+        // 4th+ copy — redundant
+        if (ingTotal >= 4) value -= 150;
+
+        // Loner — only card in its category
+        if (catTotal <= 1) value -= 15;
+
+        return value;
+    }
+
     updateBotTurn(player) {
         if (!player.botStarted) {
             player.botStarted = true;
@@ -538,7 +597,11 @@ class Game {
         player.botTimer += 1;
         if (player.botTimer < 60) return;
 
-        // — Draw phase —
+        player.turnCount++;
+
+        const cfg = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
+
+        // — Draw phase: evaluate steals vs deck draw —
         const canSteal = [];
         for (let i = 0; i < this.state.players.length; i++) {
             const p = this.state.players[i];
@@ -548,14 +611,24 @@ class Game {
             }
         }
 
-        if (this.state.deck.length > 0 && canSteal.length > 0 && Math.random() < 0.25) {
-            const target = canSteal[Math.floor(Math.random() * canSteal.length)];
-            this.state.drawFromDiscard(player, target);
+        // Find best steal target by card value
+        let bestStealValue = -Infinity;
+        let bestStealTarget = null;
+        for (const target of canSteal) {
+            const card = target.discardPile[target.discardPile.length - 1];
+            const v = this.botCardValue(card, player);
+            if (v > bestStealValue) {
+                bestStealValue = v;
+                bestStealTarget = target;
+            }
+        }
+
+        if (bestStealTarget && bestStealValue >= cfg.stealThreshold) {
+            this.state.drawFromDiscard(player, bestStealTarget);
         } else if (this.state.deck.length > 0) {
             this.state.drawFromDeck(player);
-        } else if (canSteal.length > 0) {
-            const target = canSteal[Math.floor(Math.random() * canSteal.length)];
-            this.state.drawFromDiscard(player, target);
+        } else if (bestStealTarget) {
+            this.state.drawFromDiscard(player, bestStealTarget);
         } else {
             this.endTurn();
             return;
@@ -563,7 +636,7 @@ class Game {
 
         this.audio.play('draw', { volume: 0.2 });
 
-        // — Check win —
+        // — Check win before discarding —
         if (this.state.canWin(player)) {
             this.state.gamePhase = 'gameOver';
             this.gameState = 'gameOver';
@@ -574,24 +647,16 @@ class Game {
             return;
         }
 
-        // — Discard phase: find worst card among hand+drawn —
+        // — Discard phase: rank all cards, drop the worst —
         const allCards = player.getAllCards();
-        const categoryCounts = {};
-        for (const c of allCards) {
-            categoryCounts[c.category] = (categoryCounts[c.category] || 0) + 1;
-        }
+        const scored = allCards.map(c => ({ card: c, value: this.botCardValue(c, player) }));
+        scored.sort((a, b) => a.value - b.value); // ascending — worst first
 
-        let worstCard = allCards[0];
-        let worstScore = Infinity;
-        for (const c of allCards) {
-            const count = categoryCounts[c.category] || 0;
-            if (count < worstScore) {
-                worstScore = count;
-                worstCard = c;
-            }
-        }
+        // difficulty-based mistake: some bots discard the Nth-worst instead of the worst
+        const discardIdx = Math.min(cfg.discardIndex, scored.length - 1);
+        const discardCard = scored[discardIdx].card;
 
-        this.state.discardCard(player, worstCard);
+        this.state.discardCard(player, discardCard);
         this.audio.play('discard', { volume: 0.2 });
         this.endTurn();
         player.botStarted = false;
@@ -730,7 +795,7 @@ class Game {
     }
 
     getDrawnCardRect() {
-        return { x: HOTPOT.WIDTH / 2 + 35, y: HOTPOT.UI.DRAWN_Y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
+        return { x: HOTPOT.WIDTH / 2 + 100, y: HOTPOT.UI.DRAWN_Y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
     }
 
     // ---------- Draw ----------
@@ -831,12 +896,10 @@ class Game {
         this.gameCtx.fillText('🀄', rect.x + rect.w / 2, rect.y + rect.h / 2 + 8);
 
         this.gameCtx.font = '13px Arial';
-        this.gameCtx.fillText(`Deck: ${this.state.deck.length}`, rect.x + rect.w / 2, rect.y + rect.h + 18);
 
         if (isClickable && this.state.deck.length > 0) {
             this.gameCtx.fillStyle = '#ff6666';
             this.gameCtx.font = '11px Arial';
-            this.gameCtx.fillText('← click to draw', rect.x + rect.w / 2, rect.y + rect.h + 35);
         }
     }
 
@@ -871,12 +934,10 @@ class Game {
             this.gameCtx.font = '11px Arial';
             this.gameCtx.textAlign = 'center';
             this.gameCtx.fillText(p.name, rect.x + rect.w / 2, rect.y - 6);
-            this.gameCtx.fillText(`${p.discardPile.length} discarded`, rect.x + rect.w / 2, rect.y + rect.h + 15);
 
             if (canClick) {
                 this.gameCtx.fillStyle = '#ffcc00';
                 this.gameCtx.font = '10px Arial';
-                this.gameCtx.fillText('← click to steal', rect.x + rect.w / 2, rect.y + rect.h + 30);
             }
         }
     }
@@ -989,7 +1050,8 @@ class Game {
         }
 
         // Mini info label at each bot's edge
-        const info = `${player.name}  ${player.sets.length}set(s)  ${cards.length}crds`;
+        const cfgLbl = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
+        const info = `${player.name} [${cfgLbl.desc}]  ${player.sets.length}set  ${cards.length}crds`;
         this.gameCtx.font = '10px Arial';
         this.gameCtx.textBaseline = 'middle';
         if (index === 1) {
@@ -1033,16 +1095,16 @@ class Game {
         this.gameCtx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
         this.gameCtx.font = 'bold 16px Arial';
         this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(label, HOTPOT.WIDTH / 2, 305);
+        this.gameCtx.fillText(label, HOTPOT.WIDTH / 2, 80);
 
         if (currentPlayer.isHuman && this.turnPhase === 'draw') {
             this.gameCtx.fillStyle = '#ffcc66';
             this.gameCtx.font = '13px Arial';
-            this.gameCtx.fillText('Click the deck to draw, or click an opponent\'s discard pile to steal', HOTPOT.WIDTH / 2, 322);
+            this.gameCtx.fillText('Click the deck to draw, or click an opponent\'s discard pile to steal', HOTPOT.WIDTH / 2, 100);
         } else if (currentPlayer.isHuman && this.turnPhase === 'discard') {
             this.gameCtx.fillStyle = '#ffcc66';
             this.gameCtx.font = '13px Arial';
-            this.gameCtx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, 322);
+            this.gameCtx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, 115);
         }
 
         if (currentPlayer.isHuman && this.turnPhase === 'discard' && this.state.canWin(this.state.players[0])) {
@@ -1107,14 +1169,14 @@ class Game {
 
     drawMessage() {
         this.gameCtx.fillStyle = 'rgba(0,0,0,0.8)';
-        this.gameCtx.fillRect(150, 260, 500, 50);
+        this.gameCtx.fillRect(150, 55, 500, 50);
         this.gameCtx.strokeStyle = HOTPOT.COLORS.HIGHLIGHT;
         this.gameCtx.lineWidth = 2;
-        this.gameCtx.strokeRect(150, 260, 500, 50);
+        this.gameCtx.strokeRect(150, 55, 500, 50);
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 16px Arial';
         this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(this.state.message, HOTPOT.WIDTH / 2, 290);
+        this.gameCtx.fillText(this.state.message, HOTPOT.WIDTH / 2, 85);
     }
 
     drawGUILayer() {
@@ -1123,6 +1185,7 @@ class Game {
 
     drawDebugLayer() {
         this.debugCtx.clearRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+        if (!this.debugEnabled) return;
         this.debugCtx.fillStyle = HOTPOT.COLORS.DEBUG_BG;
         this.debugCtx.fillRect(5, 5, 220, 160);
         this.debugCtx.fillStyle = HOTPOT.COLORS.DEBUG_TEXT;
