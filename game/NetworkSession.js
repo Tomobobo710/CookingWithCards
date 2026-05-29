@@ -209,8 +209,10 @@ class HotpotNetworkSession {
         // Deal initial hands
         this.gameState.dealInitialHands();
 
-        // Sort human hand
-        this.game.sortHandByCategory(this.localPlayer);
+        // Sort all hands
+        for (const p of this.game.state.players) {
+            this.game.sortHandByCategory(p);
+        }
         this.localPlayer.hasDrawn = false;
         this.localPlayer.drawnCard = null;
 
@@ -399,6 +401,7 @@ getFields: () => ({
         this.game.turnPhase = 'draw';
         this.game.bestSets = [];
         for (const p of this.game.state.players) {
+            this.game.sortHandByCategory(p);
             for (const c of p.hand) c.highlighted = null;
             if (p.drawnCard) p.drawnCard.highlighted = null;
         }
@@ -682,6 +685,7 @@ getFields: () => ({
                 this.game.turnPhase = 'draw';
                 this.game.bestSets = [];
                 for (const p of this.game.state.players) {
+                    this.game.sortHandByCategory(p);
                     for (const c of p.hand) c.highlighted = null;
                     if (p.drawnCard) p.drawnCard.highlighted = null;
                 }
@@ -1029,6 +1033,7 @@ getFields: () => ({
         if (remoteState === "WAITING") {
             this.game.gameState = "waitingForHostMenu";
         } else if (remoteState === "COUNTDOWN") {
+            this.state = "COUNTDOWN";
             this.game.gameState = "onlineMultiplayer";
             // Start countdown synced from host
             const remoteGame = this.syncSystem ? this.syncSystem.getRemote("game") : null;
@@ -1036,8 +1041,10 @@ getFields: () => ({
                 this.game.countdown.active = true;
                 this.game.countdown.phase = "countdown";
                 if (remoteGame && typeof remoteGame.countdownRemaining === "number") {
-                    this.game.countdown.countdownNumber = Math.max(1, Math.ceil(remoteGame.countdownRemaining));
+                    this.countdownTimer = remoteGame.countdownRemaining;
+                    this.game.countdown.countdownNumber = Math.max(1, Math.ceil(this.countdownTimer));
                 } else {
+                    this.countdownTimer = 3;
                     this.game.countdown.countdownNumber = 3;
                 }
                 this.game.countdown.timer = 0;

@@ -169,7 +169,9 @@ class Game {
             this.applySpeedToCard(card);
         }
 
-        this.sortHandByCategory(this.state.players[0]);
+        for (const p of this.state.players) {
+            this.sortHandByCategory(p);
+        }
         this.state.players[0].hasDrawn = false;
         this.state.players[0].drawnCard = null;
 
@@ -694,9 +696,7 @@ class Game {
         }
         actingPlayer.drawnCard = null;
 
-        if (actingPlayer.isHuman) {
-            this.sortHandByCategory(actingPlayer);
-        }
+        this.sortHandByCategory(actingPlayer);
 
         this.state.currentPlayerIndex = this.state.getNextPlayerIndex();
 
