@@ -848,18 +848,13 @@ class HotpotNetworkSession {
                     const ld = remoteData.lastDiscard;
                     let cardToDiscard;
                     if (ld.source === 'drawnCard') {
-                        if (!localPlayer.drawnCard) throw new Error('[NetworkSession] Cannot discard drawnCard but player has no drawnCard');
                         cardToDiscard = localPlayer.drawnCard;
                     } else if (ld.source === 'hand') {
-                        if (ld.handIndex < 0 || ld.handIndex >= localPlayer.hand.length) throw new Error('[NetworkSession] Cannot discard hand card at invalid index');
                         cardToDiscard = localPlayer.hand[ld.handIndex];
                     }
-                    if (!cardToDiscard) throw new Error('[NetworkSession] No card found to discard');
-                    this.gameState.discardCard(localPlayer, cardToDiscard);
-                    remoteData.lastDiscard = null;
-                } else {
-                    while (localPlayer.discardPile.length < remoteData.discardPile.length) {
-                        throw new Error('[NetworkSession] Discard pile grew but no lastDiscard data available');
+                    if (cardToDiscard) {
+                        this.gameState.discardCard(localPlayer, cardToDiscard);
+                        remoteData.lastDiscard = null;
                     }
                 }
                 for (let j = 0; j < remoteData.discardPile.length; j++) {
@@ -894,17 +889,8 @@ class HotpotNetworkSession {
                     } else if (typeof src === 'number') {
                         // Stolen from another player's discard pile — find and move it
                         const sourcePlayer = this.game.state.players[src];
-                        if (!sourcePlayer || sourcePlayer.discardPile.length === 0) {
-                            throw new Error('[NetworkSession] Cannot steal card from empty discard pile');
-                        }
-                        const topCard = sourcePlayer.discardPile[sourcePlayer.discardPile.length - 1];
-                        if (topCard.category !== remoteData.drawnCard.category || topCard.ingredient !== remoteData.drawnCard.ingredient) {
-                            throw new Error('[NetworkSession] Stolen card does not match top of discard pile');
-                        }
                         this.gameState.drawFromDiscard(localPlayer, sourcePlayer);
                         card = localPlayer.drawnCard;
-                    } else {
-                        throw new Error('[NetworkSession] Invalid drawSourcePlayer');
                     }
                     localPlayer.drawnCard = card;
                 } else {
