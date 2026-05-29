@@ -590,7 +590,6 @@ class Game {
     handleWin(player) {
         const cards = player.getAllCards();
         player.won = true;
-        this.calculateScores();
         let isMyPlayer = false;
         if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
             isMyPlayer = this.networkSession.game.state.players[this.networkSession.localPlayerIndex] === player;
@@ -609,6 +608,7 @@ class Game {
             // Single player / local multiplayer
             this.state.gamePhase = 'gameOver';
             this.gameState = 'gameOver';
+            this.calculateScores();
         }
     }
 

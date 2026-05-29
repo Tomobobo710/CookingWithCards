@@ -563,6 +563,8 @@ class HotpotNetworkSession {
         this.state = "GAME_OVER";
         this.game.gameState = "gameOver";
 
+        this.game.calculateScores();
+
         // Flip bot cards for reveal
         if (!this.game._botRevealed) {
             this.game._botRevealed = true;
