@@ -1,0 +1,13 @@
+{
+  "name": "actionnet-server",
+  "version": "1.0.0",
+  "description": "Generic ActionNet WebSocket relay server.",
+  "main": "ActionNetServer.js",
+  "scripts": {
+    "start": "node ActionNetServer.js",
+    "start:wss": "node ActionNetServerSSL.js"
+  },
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}
