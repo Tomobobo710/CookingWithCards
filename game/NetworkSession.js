@@ -985,16 +985,6 @@ class HotpotNetworkSession {
         const users = this.networkManager.getConnectedUsers();
         if (!users || users.length === 0) return;
 
-        // Reset all players
-        for (let i = 0; i < this.game.state.players.length; i++) {
-            const p = this.game.state.players[i];
-            p.playerNumber = i;
-            p.username = '';
-            p.name = '';
-            p.isHuman = false;
-            p.isRemote = false;
-        }
-
         // Map each connected user to a player slot
         let slot = 0;
         for (const user of users) {
@@ -1014,9 +1004,11 @@ class HotpotNetworkSession {
             p.playerNumber = i;
             p.name = 'Bot ' + (i + 1);
             p.username = 'Bot ' + (i + 1);
-            p.isHuman = false;
+            if (p.isHuman) {
+                p.isHuman = false;
+                p.botStarted = false;
+            }
             p.isRemote = false; // bots are handled locally by the host
-            p.botStarted = false;
         }
     }
 
