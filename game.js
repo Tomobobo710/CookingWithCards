@@ -139,9 +139,15 @@ class Game {
  setupPlayers(count) {
         const n = count || 4;
         this.state.players = [];
+        const positions = ['S', 'E', 'N', 'W'];
         this.state.players.push(new NetworkedPlayer(0, 'You', true));
+        this.state.players[0].playerNumber = 0;
+        this.state.players[0].tablePosition = positions[0];
         for (let i = 1; i < n; i++) {
-            this.state.players.push(new NetworkedPlayer(i, 'Bot ' + i, false, 1 + Math.floor(Math.random() * 3)));
+            const bot = new NetworkedPlayer(i, 'Bot ' + i, false, 1 + Math.floor(Math.random() * 3));
+            bot.playerNumber = i;
+            bot.tablePosition = positions[i];
+            this.state.players.push(bot);
         }
         this.playerCount = n;
     }
@@ -175,7 +181,7 @@ class Game {
         this.state.players[0].hasDrawn = false;
         this.state.players[0].drawnCard = null;
 
-        const humanRects = this.getHandCardRects(0);
+        const humanRects = this.getHandCardRects(this.state.players[0]);
         for (let i = 0; i < this.state.players[0].hand.length; i++) {
             const rect = humanRects[i];
             const card = this.state.players[0].hand[i];
@@ -395,7 +401,7 @@ class Game {
         for (let i = 1; i < this.state.players.length; i++) {
             const other = this.state.players[i];
             if (other.discardPile.length === 0) continue;
-            const rect = this.getDiscardRect(i);
+            const rect = this.getDiscardRect(other);
             if (this.pointInRect(pointer, rect)) {
                 const card = other.discardPile[other.discardPile.length - 1];
                 this.applySpeedToCard(card);
@@ -445,6 +451,10 @@ class Game {
                 this.applySpeedToCard(card);
                 this.state.discardCard(player, card);
                 this.audio.play('discard', { volume: 0.3 });
+                if (player.drawnCard) {
+                    player.hand.push(player.drawnCard);
+                    player.drawnCard = null;
+                }
                 this.endTurn();
                 return;
             }
@@ -457,6 +467,7 @@ class Game {
                 this.applySpeedToCard(card);
                 this.state.discardCard(player, card);
                 this.audio.play('discard', { volume: 0.3 });
+                player.drawnCard = null;
                 this.endTurn();
             }
         }
@@ -478,7 +489,7 @@ class Game {
         for (let i = 1; i < this.state.players.length; i++) {
             const other = this.state.players[i];
             if (other.discardPile.length === 0) continue;
-            const rect = this.getDiscardRect(i);
+            const rect = this.getDiscardRect(other);
             if (this.pointInRect(pointer, rect)) {
                 this.networkSession.sendPlayerAction(playerIndex, "drawDiscard", { sourcePlayerIndex: i });
                 return;
@@ -612,7 +623,7 @@ class Game {
         if (sourceType === 'discard' && sourcePlayer) {
             this.state.drawFromDiscard(player, sourcePlayer);
             if (!player.drawnCard) return;
-            const rect = this.getDiscardRect(sourcePlayer.id);
+             const rect = this.getDiscardRect(sourcePlayer);
             player.drawnCard.x = rect.x;
             player.drawnCard.y = rect.y;
             player.drawnCard.rotation = 0;
@@ -637,7 +648,7 @@ class Game {
     }
 
     animateOtherDrawnToPosition(player) {
-        const rect = this.getDrawnCardRectForPlayer(player.id);
+        const rect = this.getDrawnCardRectForPlayer(player);
         player.drawnCard.targetX = rect.x;
         player.drawnCard.targetY = rect.y;
         player.drawnCard.targetScale = 0.5625;
@@ -646,7 +657,7 @@ class Game {
     }
 
     animateOtherDiscardToPile(player, card) {
-        const rect = this.getDiscardRect(player.id);
+        const rect = this.getDiscardRect(player);
         card.targetX = rect.x;
         card.targetY = rect.y;
         this.applySpeedToCard(card);
@@ -852,7 +863,7 @@ class Game {
         return { x: cx - HOTPOT.UI.CARD_WIDTH / 2, y: cy - HOTPOT.UI.CARD_HEIGHT / 2, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
     }
 
-    getDiscardRect(playerIndex) {
+    getDiscardRect(player) {
         const cx = HOTPOT.WIDTH / 2;
         const cy = HOTPOT.HEIGHT / 2;
         const gap = 50;
@@ -861,23 +872,23 @@ class Game {
 
         const distV = hh + gap;
         const distH = hw + gap / 2 + 12.5;
-        const positions = [
-            { x: cx - hw, y: cy + distV - hh },
-            { x: cx - distH - hw, y: cy - hh },
-            { x: cx - hw, y: cy - distV - hh },
-            { x: cx + distH - hw, y: cy - hh }
-        ];
-        const pos = positions[playerIndex];
+        const positionMap = {
+            'S': { x: cx - hw, y: cy + distV - hh },
+            'E': { x: cx + distH - hw, y: cy - hh },
+            'N': { x: cx - hw, y: cy - distV - hh },
+            'W': { x: cx - distH - hw, y: cy - hh }
+        };
+        const pos = positionMap[player.tablePosition];
         return { x: pos.x, y: pos.y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
     }
 
-    getDrawnCardRectForPlayer(playerIndex) {
+    getDrawnCardRectForPlayer(player) {
         const cardScale = 0.5625;
         const fw = 80 * cardScale;
         const fh = 115 * cardScale;
         const spacing = 6;
 
-        const cards = this.state.players[playerIndex].hand;
+        const cards = player.hand;
         if (cards.length === 0) return { x: 0, y: 0, w: 0, h: 0 };
 
         const visualH = fh;
@@ -887,13 +898,13 @@ class Game {
 
         let cx, cy;
 
-        if (playerIndex === 1) {
+        if (player.tablePosition === 'E') {
             cx = fw / 2 + 12 + fw + 8 + fw / 2;
             cy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * visualH) / 2;
-        } else if (playerIndex === 2) {
+        } else if (player.tablePosition === 'N') {
             cx = (HOTPOT.WIDTH - totalW) / 2 + (cards.length * visualW) / 2;
             cy = fh / 2 + 10 + fh + 8 + fh / 2;
-        } else if (playerIndex === 3) {
+        } else if (player.tablePosition === 'W') {
             cx = HOTPOT.WIDTH - fw / 2 - 12 - fw - 8 - fw / 2;
             cy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * visualH) / 2;
         } else {
@@ -903,8 +914,7 @@ class Game {
         return { x: cx - fw / 2, y: cy - fh / 2, w: fw, h: fh };
     }
 
-    getHandCardRects(playerIndex) {
-        const player = this.state.players[playerIndex];
+    getHandCardRects(player) {
         const cards = player.hand;
         if (cards.length === 0) return [];
 
@@ -960,21 +970,11 @@ class Game {
     }
 
     getHandCardRectsForPlayer(player) {
-        if (player.isLocal || !this.networkSession) {
-            return this.getHandCardRects(0);
-        }
-        const playerIndex = this.state.players.indexOf(player);
-        if (playerIndex < 0) return [];
-        return this.getHandCardRects(playerIndex);
+        return this.getHandCardRects(player);
     }
 
     getDrawnCardRectForPlayerObj(player) {
-        if (player.isLocal || !this.networkSession) {
-            return this.getDrawnCardRect();
-        }
-        const playerIndex = this.state.players.indexOf(player);
-        if (playerIndex < 0) return this.getDrawnCardRect();
-        return this.getDrawnCardRectForPlayer(playerIndex);
+        return this.getDrawnCardRectForPlayer(player);
     }
 
     // ---------- Draw ----------
@@ -1390,7 +1390,7 @@ class Game {
 
         for (let i = 0; i < this.state.players.length; i++) {
             const p = this.state.players[i];
-            const rect = this.getDiscardRect(i);
+            const rect = this.getDiscardRect(p);
             const canClick = isClickable && i !== player.id && p.discardPile.length > 0;
 
             if (p.discardPile.length > 0) {
@@ -1440,7 +1440,7 @@ class Game {
     }
 
     drawLocalPlayerHand(player) {
-        const handRects = this.getHandCardRects(0);
+        const handRects = this.getHandCardRects(player);
 
         for (let i = 0; i < player.hand.length; i++) {
             const card = player.hand[i];

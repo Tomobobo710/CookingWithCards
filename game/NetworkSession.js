@@ -115,6 +115,7 @@ class HotpotNetworkSession {
 
         // Create remote player placeholders (up to 3 remote players)
         this.remotePlayers = [];
+        const positions = ['S', 'E', 'N', 'W'];
         const maxRemote = 3;
         for (let i = 0; i < maxRemote; i++) {
             const remotePlayer = new (this.game.state.players[0].constructor)(
@@ -123,6 +124,7 @@ class HotpotNetworkSession {
                 false,
                 1 + Math.floor(Math.random() * 3)
             );
+            remotePlayer.tablePosition = positions[i + 1];
             remotePlayer.isRemote = true;
             remotePlayer.username = 'Player ' + (i + 1);
             this.remotePlayers.push(remotePlayer);
@@ -130,6 +132,7 @@ class HotpotNetworkSession {
 
         // Replace bot players with remote placeholders
         this.game.state.players[0] = this.localPlayer;
+        this.localPlayer.tablePosition = positions[0];
         for (let i = 0; i < this.remotePlayers.length; i++) {
             this.game.state.players[i + 1] = this.remotePlayers[i];
         }
@@ -193,7 +196,6 @@ class HotpotNetworkSession {
             player.turnTimer = 0;
             player.isLocal = false;
             player.isRemote = false;
-            player.tablePosition = '';
         }
 
         // Reset game state
@@ -217,7 +219,7 @@ class HotpotNetworkSession {
         this.localPlayer.drawnCard = null;
 
         // Apply deal animations
-        const humanRects = this.game.getHandCardRects(0);
+        const humanRects = this.game.getHandCardRects(this.localPlayer);
         for (let i = 0; i < this.localPlayer.hand.length; i++) {
             const rect = humanRects[i];
             const card = this.localPlayer.hand[i];
