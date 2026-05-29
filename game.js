@@ -300,6 +300,10 @@ class Game {
                             this.currentSpeed = (this.currentSpeed % Object.keys(HOTPOT.SPEEDS).length) + 1;
                             localStorage.setItem('hotpot_speed', this.currentSpeed);
                             this.applySpeedToAllCards();
+                        } else if (btn.action === 'quit') {
+                            this.settingsOpen = false;
+                            this.clearGameState();
+                            this.gameState = 'menu';
                         }
                         return;
                     }
@@ -1913,7 +1917,19 @@ class Game {
         this.gameCtx.fillText('Change Speed', speedBtn.x + btnW / 2, speedBtn.y + btnH / 2 + 5);
         this.settingsButtons.push(speedBtn);
 
-        const closeBtn = { x: HOTPOT.WIDTH / 2 - btnW / 2, y: btnY + 45, w: btnW, h: btnH, hovered: false, action: 'close' };
+        const quitBtn = { x: HOTPOT.WIDTH / 2 - btnW / 2, y: btnY + 45, w: btnW, h: btnH, hovered: false, action: 'quit' };
+        quitBtn.hovered = this.input.isElementHovered('settings_quit');
+        this.gameCtx.fillStyle = quitBtn.hovered ? '#a00000' : '#444';
+        this.gameCtx.fillRect(quitBtn.x, quitBtn.y, btnW, btnH);
+        this.gameCtx.strokeStyle = '#fff';
+        this.gameCtx.lineWidth = 1;
+        this.gameCtx.strokeRect(quitBtn.x, quitBtn.y, btnW, btnH);
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 13px Arial';
+        this.gameCtx.fillText('Quit Game', quitBtn.x + btnW / 2, quitBtn.y + btnH / 2 + 5);
+        this.settingsButtons.push(quitBtn);
+
+        const closeBtn = { x: HOTPOT.WIDTH / 2 - btnW / 2, y: btnY + 90, w: btnW, h: btnH, hovered: false, action: 'close' };
         closeBtn.hovered = this.input.isElementHovered('settings_close');
         this.gameCtx.fillStyle = closeBtn.hovered ? '#a00000' : '#444';
         this.gameCtx.fillRect(closeBtn.x, closeBtn.y, btnW, btnH);
@@ -1924,17 +1940,5 @@ class Game {
         this.gameCtx.font = 'bold 13px Arial';
         this.gameCtx.fillText('Close', closeBtn.x + btnW / 2, closeBtn.y + btnH / 2 + 5);
         this.settingsButtons.push(closeBtn);
-
-        this.gameCtx.font = '11px Arial';
-        this.gameCtx.fillStyle = '#888';
-        const speedKeys = Object.keys(HOTPOT.SPEEDS);
-        let speedX = modalX + 45;
-        for (const key of speedKeys) {
-            const s = HOTPOT.SPEEDS[key];
-            const isActive = key == this.currentSpeed;
-            this.gameCtx.fillStyle = isActive ? HOTPOT.COLORS.HIGHLIGHT : '#888';
-            this.gameCtx.fillText(`${s.name} (${key})`, speedX, modalY + modalH - 15);
-            speedX += 70;
-        }
     }
 }
