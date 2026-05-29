@@ -842,7 +842,42 @@ class HotpotNetworkSession {
                 }
             }
 
-           // Sync drawn card (preserve object if possible)
+           // Sync discard pile first (before drawnCard is cleared)
+            if (Array.isArray(remoteData.discardPile)) {
+                const pileGrew = localPlayer.discardPile.length < remoteData.discardPile.length;
+                if (remoteData.lastDiscard && pileGrew && remoteData.lastDiscard.source === 'drawnCard' && localPlayer.drawnCard) {
+                    this.gameState.discardCard(localPlayer, localPlayer.drawnCard);
+                    localPlayer.drawnCard = null;
+                    remoteData.lastDiscard = null;
+                } else {
+                    while (localPlayer.discardPile.length < remoteData.discardPile.length) {
+                        const nc = new Card('', '', null, 0.75);
+                        const seat = seatMap[i];
+                        nc.x = seat.x; nc.y = seat.y;
+                        localPlayer.discardPile.push(nc);
+                    }
+                }
+                for (let j = 0; j < remoteData.discardPile.length; j++) {
+                    const dc = remoteData.discardPile[j];
+                    if (j < localPlayer.discardPile.length) {
+                        localPlayer.discardPile[j].category = dc.category;
+                        localPlayer.discardPile[j].ingredient = dc.ingredient;
+                        localPlayer.discardPile[j].isHotpot = HOTPOT.CATEGORIES[dc.category] ? true : false;
+                        if (localPlayer.discardPile[j].isHotpot) {
+                            localPlayer.discardPile[j].frontColor = HOTPOT.CATEGORIES[dc.category].color;
+                            localPlayer.discardPile[j].suit = dc.category;
+                            localPlayer.discardPile[j].value = dc.ingredient;
+                            localPlayer.discardPile[j].textColor = '#000000';
+                        } else {
+                            localPlayer.discardPile[j].frontColor = '#ffffff';
+                        }
+                    } else {
+                        localPlayer.discardPile[j] = new Card(dc.category, dc.ingredient, null, 0.75);
+                    }
+                }
+            }
+
+            // Sync drawn card (preserve object if possible)
             if (remoteData.drawnCard) {
                 if (!localPlayer.drawnCard) {
                     const nc = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, null, 0.5);
@@ -870,37 +905,6 @@ class HotpotNetworkSession {
                 }
             } else {
                 localPlayer.drawnCard = null;
-            }
-
-      // Sync discard pile (preserve objects)
-            if (Array.isArray(remoteData.discardPile)) {
-                while (localPlayer.discardPile.length < remoteData.discardPile.length) {
-                    const nc = new Card('', '', null, 0.75);
-                    const seat = seatMap[i];
-                    nc.x = seat.x; nc.y = seat.y;
-                    localPlayer.discardPile.push(nc);
-                }
-                for (let j = 0; j < remoteData.discardPile.length; j++) {
-                    const dc = remoteData.discardPile[j];
-                    if (j < localPlayer.discardPile.length) {
-                        localPlayer.discardPile[j].category = dc.category;
-                        localPlayer.discardPile[j].ingredient = dc.ingredient;
-                        localPlayer.discardPile[j].isHotpot = HOTPOT.CATEGORIES[dc.category] ? true : false;
-                        if (localPlayer.discardPile[j].isHotpot) {
-                            localPlayer.discardPile[j].frontColor = HOTPOT.CATEGORIES[dc.category].color;
-                            localPlayer.discardPile[j].suit = dc.category;
-                            localPlayer.discardPile[j].value = dc.ingredient;
-                            localPlayer.discardPile[j].textColor = '#000000';
-                        } else {
-                            localPlayer.discardPile[j].frontColor = '#ffffff';
-                        }
-                    } else {
-                        localPlayer.discardPile[j] = new Card(dc.category, dc.ingredient, null, 0.75);
-                    }
-                }
-                if (localPlayer.discardPile.length > remoteData.discardPile.length) {
-                    localPlayer.discardPile.length = remoteData.discardPile.length;
-                }
             }
 
             // Sync stats
