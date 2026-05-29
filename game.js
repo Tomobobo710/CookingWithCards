@@ -629,8 +629,7 @@ class Game {
             player.drawnCard.y = rect.y;
             player.drawnCard.rotation = 0;
             player.drawnCard.targetRotation = 0;
-            player.drawnCard.scale = 0.75;
-            player.drawnCard.targetScale = 0.75;
+            player.drawnCard.scaleTo(0.75, true);
             player.drawnCard.faceUp = true;
             player.drawnCard.targetX = rect.x;
             player.drawnCard.targetY = rect.y;
@@ -652,7 +651,7 @@ class Game {
         const rect = this.getDrawnCardRectForPlayer(player);
         player.drawnCard.targetX = rect.x;
         player.drawnCard.targetY = rect.y;
-        player.drawnCard.targetScale = 0.5625;
+        player.drawnCard.targetScale = 0.5;
         const handAngle = player.id === 1 ? Math.PI / 2 : (player.id === 2 ? Math.PI : -Math.PI / 2);
         player.drawnCard.targetRotation = handAngle;
     }
@@ -803,16 +802,6 @@ class Game {
         const actingPlayer = this.state.getCurrentPlayer();
         actingPlayer.hasDrawn = false;
 
-       if (actingPlayer.drawnCard) {
-            if (!actingPlayer.isHuman) {
-                const botIdx = this.state.players.indexOf(actingPlayer);
-                const ha = botIdx === 1 ? Math.PI / 2 : (botIdx === 2 ? Math.PI : -Math.PI / 2);
-                this.applySpeedToCard(actingPlayer.drawnCard);
-                actingPlayer.drawnCard.rotation = ha + Math.PI * 2 * 3;
-                actingPlayer.drawnCard.rotateTo(ha);
-                actingPlayer.drawnCard.scaleTo(0.375);
-            }
-        }
         actingPlayer.drawnCard = null;
 
         this.sortHandByCategory(actingPlayer);
@@ -884,7 +873,7 @@ class Game {
     }
 
     getDrawnCardRectForPlayer(player) {
-        const cardScale = 0.5625;
+       const cardScale = 0.5;
         const fw = 80 * cardScale;
         const fh = 115 * cardScale;
         const spacing = 6;
@@ -1402,6 +1391,7 @@ class Game {
             if (p.discardPile.length > 0) {
                 const topCard = p.discardPile[p.discardPile.length - 1];
                 topCard.moveTo(rect.x, rect.y);
+                topCard.scaleTo(0.75);
                 topCard.draw(this.gameCtx);
 
                 if (canClick) {
@@ -1479,6 +1469,7 @@ class Game {
             const drawnRect = this.getDrawnCardRect();
             const card = player.drawnCard;
             card.moveTo(drawnRect.x, drawnRect.y);
+            card.scaleTo(0.75);
             card.draw(this.gameCtx);
 
             this.gameCtx.fillStyle = '#fff';
