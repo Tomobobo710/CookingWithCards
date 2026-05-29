@@ -1033,20 +1033,15 @@ class HotpotNetworkSession {
     }
 
     continueAfterOpponentDisconnect() {
-        // Replace disconnected player with a bot
-        // The bot will play automatically during its turn
-
         // Transition back to PLAYING state
         this.state = "PLAYING";
         this.game.gameState = "onlineMultiplayer";
 
-        // Reset the bot player
+        // Reset all bot players (including the one that replaced the disconnected player)
         for (const p of this.game.state.players) {
-            if (!p.isRemote && !p.isHuman) {
-                p.gameOver = false;
-                p.score = 0;
-                p.turnTimer = 0;
+            if (!p.isHuman) {
                 p.botStarted = false;
+                p.turnTimer = 0;
             }
         }
 
@@ -1055,25 +1050,82 @@ class HotpotNetworkSession {
             this.game.countdown.active = false;
             this.game.countdown.phase = "waiting";
         }
+
+        // Reset turn for the current player if they were the one who disconnected
+        const cp = this.gameState.getCurrentPlayer();
+        if (cp && !cp.isHuman) {
+            cp.botStarted = false;
+            cp.turnTimer = 0;
+        }
     }
 
     replacePlayerWithBot(user) {
-        // Find the remote player that left and replace with bot
-        for (let i = 0; i < this.remotePlayers.length; i++) {
-            if (this.remotePlayers[i].username === user.username ||
-                this.remotePlayers[i].name === user.username) {
-                // Replace with bot
-                const botPlayer = new (this.game.state.players[0].constructor)(
-                    i + 1,
-                    'Bot ' + (i + 1),
-                    false,
-                    1 + Math.floor(Math.random() * 3)
-                );
-                botPlayer.isRemote = false;
-                this.remotePlayers[i] = botPlayer;
-                this.game.state.players[i + 1] = botPlayer;
+        // Find the player slot that matches the disconnected user
+        let leftSlot = -1;
+        for (let i = 0; i < this.game.state.players.length; i++) {
+            const p = this.game.state.players[i];
+            if (p.username === user.username || p.name === user.username) {
+                leftSlot = i;
                 break;
             }
+        }
+
+        if (leftSlot === -1) {
+            // User not found in player slots, try to find in remotePlayers
+            for (let i = 0; i < this.remotePlayers.length; i++) {
+                if (this.remotePlayers[i].username === user.username ||
+                    this.remotePlayers[i].name === user.username) {
+                    leftSlot = i + 1;
+                    break;
+                }
+            }
+        }
+
+        if (leftSlot === -1) return;
+
+        const leavingPlayer = this.game.state.players[leftSlot];
+
+        // Determine the tablePosition this slot should keep
+        const tablePosition = leavingPlayer ? leavingPlayer.tablePosition : HOTPOT.POSITIONS[leftSlot] || 'S';
+        const playerNumber = leavingPlayer ? leavingPlayer.playerNumber : leftSlot;
+
+        // Replace with bot that takes over the human's hand and state
+        const botPlayer = new (this.game.state.players[0].constructor)(
+            leftSlot,
+            'Bot ' + (leftSlot + 1),
+            false,
+            1 + Math.floor(Math.random() * 3)
+        );
+        botPlayer.isRemote = false;
+        botPlayer.isLocal = false;
+        botPlayer.playerNumber = playerNumber;
+        botPlayer.tablePosition = tablePosition;
+        botPlayer.botStarted = false;
+        botPlayer.turnTimer = 0;
+
+        // Copy the human's game state to the bot — hand, drawn card, discard pile, sets, score, etc.
+        if (leavingPlayer) {
+            botPlayer.hand = leavingPlayer.hand;
+            botPlayer.drawnCard = leavingPlayer.drawnCard;
+            botPlayer.hasDrawn = leavingPlayer.hasDrawn;
+            botPlayer.discardPile = leavingPlayer.discardPile;
+            botPlayer.sets = leavingPlayer.sets;
+            botPlayer.score = leavingPlayer.score;
+            botPlayer.turnCount = leavingPlayer.turnCount;
+            botPlayer.won = leavingPlayer.won;
+        }
+
+        this.game.state.players[leftSlot] = botPlayer;
+
+        // Also update remotePlayers if this was a remote player
+        const remoteIdx = leftSlot - 1;
+        if (remoteIdx >= 0 && remoteIdx < this.remotePlayers.length) {
+            this.remotePlayers[remoteIdx] = botPlayer;
+        }
+
+        // Re-sync player slots to the remote client via sync
+        if (this.isHost) {
+            this.assignPlayerSlots();
         }
     }
 
