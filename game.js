@@ -19,7 +19,6 @@ class Game {
         this.state = new GameState();
         this.gameState = 'menu';
         this.turnPhase = 'draw';
-        this.turnTimer = 0;
         this.bestSets = [];
         this._botRevealed = false;
         this.debugEnabled = false;
@@ -208,7 +207,6 @@ class Game {
     clearGameState() {
         this.state.reset();
         this.turnPhase = 'draw';
-        this.turnTimer = 0;
         this.bestSets = [];
         this._botRevealed = false;
         this.settingsOpen = false;
@@ -1749,22 +1747,12 @@ class Game {
             this.gameCtx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, this.msgY + 20);
         }
 
-        if (isMyTurn && this.networkSession && this.turnPhase === 'discard') {
-            const turnTimer = currentPlayer.turnTimer || 0;
-            const remaining = Math.max(0, Math.ceil(60 - turnTimer));
-            this.gameCtx.fillStyle = remaining <= 10 ? '#ff6b6b' : '#ffcc66';
-            this.gameCtx.font = 'bold 14px Arial';
-            this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.msgY + 40);
-        }
-
-        if (!isMyTurn && this.networkSession) {
-            const turnTimer = currentPlayer.turnTimer || 0;
-            const remaining = Math.max(0, Math.ceil(60 - turnTimer));
-            this.gameCtx.fillStyle = remaining <= 10 ? '#ff6b6b' : '#ffcc66';
-            this.gameCtx.font = 'bold 14px Arial';
-            this.gameCtx.textAlign = 'center';
-            this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.msgY + 40);
-        }
+        // TODO: implement timer — remaining = ???
+        // const remaining = 0;
+        // this.gameCtx.fillStyle = remaining <= 10 ? '#ff6b6b' : '#ffcc66';
+        // this.gameCtx.font = 'bold 14px Arial';
+        // this.gameCtx.textAlign = 'center';
+        // this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.msgY + 40);
 
         const localPlayer = this.findLocalPlayer();
         if (isMyTurn && this.turnPhase === 'discard' && this.state.canWin(localPlayer)) {

@@ -34,9 +34,7 @@ class HotpotNetworkSession {
         this.syncSystem = null;
         this._syncReadyToStart = false;
 
-        // Turn timer (60 seconds)
-        this.TURN_TIMEOUT = 60;
-    }
+     }
 
     start() {
         this.syncSystem = this.game.gui.syncSystem;
@@ -149,7 +147,6 @@ class HotpotNetworkSession {
             this.checkRemoteGameOver();
             this.checkHostWaitingState();
             this.updateRemotePlayerStates();
-            this.updateTurnTimer();
         });
 
         this.syncSystem.on("remoteStale", () => {
@@ -182,8 +179,7 @@ class HotpotNetworkSession {
             player.hasDrawn = false;
             player.drawnCard = null;
             player.score = 0;
-            player.turnCount = 0;
-            player.turnTimer = 0;
+           player.turnCount = 0;
             player.isLocal = false;
             player.isRemote = false;
         }
@@ -257,7 +253,6 @@ class HotpotNetworkSession {
                 currentPlayerIndex: this.gameState.currentPlayerIndex,
                 roundNumber: this.gameState.roundNumber,
                 deckCount: this.gameState.deck.length,
-                turnTimer: this.game.turnTimer,
                 turnPhase: this.game.turnPhase,
                 countdownPhase: this.state === "COUNTDOWN" ? "countdown" : (this.state === "PLAYING" && this.countdown?.phase === "go" ? "go" : "none"),
                 countdownRemaining: this.countdownTimer
@@ -282,7 +277,6 @@ class HotpotNetworkSession {
                         won: player.won,
                         score: player.score,
                         turnCount: player.turnCount,
-                        turnTimer: player.turnTimer,
                         username: player.username || ''
                     })
                 });
@@ -306,23 +300,11 @@ class HotpotNetworkSession {
         }
 
         // Update turn timer and handle bot turns (host authoritative)
-        if (this.isHost) {
+       if (this.isHost) {
             const currentPlayer = this.game.state.players[this.gameState.currentPlayerIndex];
-            if (currentPlayer) {
-                currentPlayer.turnTimer += deltaTime;
-
-                // Bot AI for bot players (not remote humans)
-                if (!currentPlayer.isHuman && !currentPlayer.isRemote) {
-                    if (currentPlayer.turnTimer >= this.TURN_TIMEOUT) {
-                        this.skipTurn();
-                        return;
-                    }
-                    // Run bot turn
-                    this.game.updateBotTurn(currentPlayer);
-                } else if (currentPlayer.turnTimer >= this.TURN_TIMEOUT) {
-                    // Remote human or other — skip turn on timeout
-                    this.skipTurn();
-                }
+            if (currentPlayer && !currentPlayer.isHuman && !currentPlayer.isRemote) {
+                // Run bot turn
+                this.game.updateBotTurn(currentPlayer);
             }
         } else {
             // Non-host: check if host ended the game
@@ -347,8 +329,7 @@ class HotpotNetworkSession {
 
     skipTurn() {
         const player = this.game.state.players[this.gameState.currentPlayerIndex];
-        if (!player || player.isHuman) return;
-        // Skip remote players too (they didn't act in time)
+        if (!player) return;
 
         // Auto-draw if needed
         if (!player.hasDrawn) {
@@ -382,13 +363,11 @@ class HotpotNetworkSession {
         }
 
         player.hasDrawn = false;
-        player.turnTimer = 0;
         this.gameState.currentPlayerIndex = this.gameState.getNextPlayerIndex();
 
         const nextPlayer = this.gameState.getCurrentPlayer();
         nextPlayer.hasDrawn = false;
         nextPlayer.drawnCard = null;
-        nextPlayer.turnTimer = 0;
 
         if (!nextPlayer.isHuman) {
             nextPlayer.botStarted = false;
@@ -714,7 +693,6 @@ class HotpotNetworkSession {
                 const nextPlayer = this.gameState.getCurrentPlayer();
                 nextPlayer.hasDrawn = false;
                 nextPlayer.drawnCard = null;
-                nextPlayer.turnTimer = 0;
 
                 if (!nextPlayer.isHuman) {
                     nextPlayer.botStarted = false;
@@ -893,8 +871,7 @@ class HotpotNetworkSession {
 
             // Sync stats
             if (typeof remoteData.score === "number") localPlayer.score = remoteData.score;
-            if (typeof remoteData.turnCount === "number") localPlayer.turnCount = remoteData.turnCount;
-            if (typeof remoteData.turnTimer === "number") localPlayer.turnTimer = remoteData.turnTimer;
+         if (typeof remoteData.turnCount === "number") localPlayer.turnCount = remoteData.turnCount;
             if (typeof remoteData.sets === "number") {
                 localPlayer.sets = [];
                 for (let s = 0; s < remoteData.sets; s++) {
@@ -928,24 +905,7 @@ class HotpotNetworkSession {
         }
     }
 
-    updateTurnTimer() {
-        if (this.state !== "PLAYING") return;
-
-        // Update local turn timer display from sync data (for non-host)
-        if (!this.isHost) {
-            const cpIdx = this.gameState.currentPlayerIndex;
-            const sourceId = "player_" + cpIdx;
-            const remoteData = this.syncSystem ? this.syncSystem.getRemote(sourceId) : null;
-            if (remoteData && typeof remoteData.turnTimer === "number") {
-                const currentPlayer = this.game.state.players[cpIdx];
-                if (currentPlayer) {
-                    currentPlayer.turnTimer = remoteData.turnTimer;
-                }
-            }
-        }
-    }
-
-    assignPlayerSlots() {
+   assignPlayerSlots() {
         const users = this.networkManager.getConnectedUsers();
         if (!users || users.length === 0) return;
 
@@ -995,7 +955,7 @@ class HotpotNetworkSession {
                 p.name = user.username;
 
                 if (wasCurrentTurn && this.state === "PLAYING") {
-                    this.forceSkipTurn();
+                    this.skipTurn();
                 }
                 break;
             }
@@ -1035,7 +995,6 @@ class HotpotNetworkSession {
             if (!p.isRemote && !p.isHuman) {
                 p.gameOver = false;
                 p.score = 0;
-                p.turnTimer = 0;
                 p.botStarted = false;
             }
         }
@@ -1063,55 +1022,10 @@ class HotpotNetworkSession {
                 p.botStarted = false;
 
                 if (wasCurrentTurn && this.state === "PLAYING") {
-                    this.forceSkipTurn();
+                 this.skipTurn();
                 }
                 break;
             }
-        }
-    }
-
-    forceSkipTurn() {
-        const player = this.game.state.players[this.gameState.currentPlayerIndex];
-        if (!player) return;
-
-        // Auto-draw if needed
-        if (!player.hasDrawn) {
-            if (this.gameState.deck.length > 0) {
-                this.gameState.drawFromDeck(player);
-                this.game.audio.play('draw', { volume: 0.2 });
-            }
-        }
-
-        // Auto-discard if needed
-        if (player.hasDrawn && player.drawnCard) {
-            this.gameState.discardCard(player, player.drawnCard);
-            this.game.audio.play('discard', { volume: 0.2 });
-            player.drawnCard = null;
-        } else if (player.hand.length > 0) {
-            const cardToDiscard = player.hand[0];
-            this.gameState.discardCard(player, cardToDiscard);
-            this.game.audio.play('discard', { volume: 0.2 });
-        }
-
-        player.hasDrawn = false;
-        player.turnTimer = 0;
-        this.gameState.currentPlayerIndex = this.gameState.getNextPlayerIndex();
-
-        const nextPlayer = this.gameState.getCurrentPlayer();
-        nextPlayer.hasDrawn = false;
-        nextPlayer.drawnCard = null;
-        nextPlayer.turnTimer = 0;
-
-        if (!nextPlayer.isHuman) {
-            nextPlayer.botStarted = false;
-        }
-
-        this.game.turnPhase = 'draw';
-        this.game.bestSets = [];
-        for (const p of this.game.state.players) {
-            this.game.sortHandByCategory(p);
-            for (const c of p.hand) c.highlighted = null;
-            if (p.drawnCard) p.drawnCard.highlighted = null;
         }
     }
 
