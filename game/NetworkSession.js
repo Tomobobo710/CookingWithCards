@@ -755,8 +755,16 @@ class HotpotNetworkSession {
                     if (p.drawnCard) p.drawnCard.highlighted = null;
                 }
             }
+        else if (action === "win") {
+            if (!player.hasDrawn) return;
+
+            if (this.gameState.canWin(player)) {
+                player.won = true;
+                this.endGame();
+                return;
+            }
         }
-    
+    }
 
 
     updateRemotePlayerStates() {
