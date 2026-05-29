@@ -473,7 +473,7 @@ class Game {
         }
     }
 
-    handleRemotePlayerDraw(player, playerIndex) {
+ handleRemotePlayerDraw(player, playerIndex) {
         if (!this.input.isLeftMouseButtonJustPressed()) return;
         const pointer = this.input.getPointerPosition();
 
@@ -482,11 +482,12 @@ class Game {
 
         const deckRect = this.getDeckRect();
         if (this.pointInRect(pointer, deckRect) && deckAvailable) {
-            this.networkSession.sendPlayerAction(playerIndex, "drawDeck");
+            this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "drawDeck");
             return;
         }
 
-        for (let i = 1; i < this.state.players.length; i++) {
+        for (let i = 0; i < this.state.players.length; i++) {
+            if (i === playerIndex) continue; // can't draw from your own discard pile
             const other = this.state.players[i];
             if (other.discardPile.length === 0) continue;
             const rect = this.getDiscardRect(other);
@@ -1354,12 +1355,17 @@ class Game {
         const rect = this.getDeckRect();
         const player = this.state.getCurrentPlayer();
         let isMyTurn = false;
-        if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+        let deckLength = this.state.deck.length;
+        if (this.networkSession && !this.networkSession.isHost) {
             isMyTurn = this.networkSession.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+            const remoteGame = this.networkSession.syncSystem ? this.networkSession.syncSystem.getRemote("game") : null;
+            if (remoteGame && typeof remoteGame.deckCount === "number") {
+                deckLength = remoteGame.deckCount;
+            }
         } else {
             isMyTurn = player && player.isHuman;
         }
-        const isClickable = isMyTurn && this.turnPhase === 'draw' && this.state.deck.length > 0;
+        const isClickable = isMyTurn && this.turnPhase === 'draw' && deckLength > 0;
 
         this.gameCtx.fillStyle = isClickable ? '#a00000' : HOTPOT.COLORS.DECK;
         this.gameCtx.fillRect(rect.x, rect.y, rect.w, rect.h);

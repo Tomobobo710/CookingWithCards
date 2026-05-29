@@ -50,8 +50,19 @@ class HotpotNetworkSession {
                     dc.onmessage = (evt) => {
                         try {
                             const message = JSON.parse(evt.data);
-                            if (message.type === 'syncUpdate' && this.syncSystem) {
+                            if (this.syncSystem && message.type === 'syncUpdate') {
                                 this.syncSystem.handleSyncUpdate(message);
+                            }
+                            // Route all other messages to the GUI's custom handler system
+                            if (this.game && this.game.gui && message.type !== 'syncUpdate') {
+                                const handler = this.game.gui.customMessageHandlers?.get(message.type);
+                                if (handler) {
+                                    try {
+                                        handler(message);
+                                    } catch (e) {
+                                        console.error(`[NetworkSession] Error in handler '${message.type}':`, e);
+                                    }
+                                }
                             }
                         } catch (e) {
                             // ignore
@@ -93,6 +104,14 @@ class HotpotNetworkSession {
         // Listen for remote player actions (draw/discard)
         this.game.gui.registerMessageHandler("playerAction", (message) => {
             this.handlePlayerAction(message);
+        });
+
+        // Listen for rematch requests (guest → host)
+        this.game.gui.registerMessageHandler("rematch", (message) => {
+            if (this.isHost) {
+                this._guestWantsRematch = true;
+                this.handleRematchRequest(message);
+            }
         });
 
          // Listen for disconnections (only host processes this)
@@ -268,31 +287,34 @@ class HotpotNetworkSession {
                 roundNumber: this.gameState.roundNumber,
                 deckCount: this.gameState.deck.length,
                 turnTimer: this.game.turnTimer,
+                turnPhase: this.game.turnPhase,
                 countdownPhase: this.state === "COUNTDOWN" ? "countdown" : (this.state === "PLAYING" && this.countdown?.phase === "go" ? "go" : "none"),
                 countdownRemaining: this.countdownTimer
             })
         });
 
-        // Per-player sync sources — every player's full state
-        for (let i = 0; i < this.game.state.players.length; i++) {
-            const player = this.game.state.players[i];
-            const sourceId = "player_" + i;
+       // Per-player sync sources — only the host broadcasts player state
+        if (this.isHost) {
+            for (let i = 0; i < this.game.state.players.length; i++) {
+                const player = this.game.state.players[i];
+                const sourceId = "player_" + i;
 
-            this.syncSystem.register(sourceId, {
-getFields: () => ({
-                    playerNumber: player.playerNumber ?? player.id,
-                    isHuman: player.isHuman,
-                    hand: player.hand.map(c => ({ category: c.category, ingredient: c.ingredient })),
-                    drawnCard: player.drawnCard ? { category: player.drawnCard.category, ingredient: player.drawnCard.ingredient } : null,
-                    discardPile: player.discardPile.map(c => ({ category: c.category, ingredient: c.ingredient })),
-                    sets: player.sets.length,
-                    won: player.won,
-                    score: player.score,
-                    turnCount: player.turnCount,
-                    turnTimer: player.turnTimer,
-                    username: player.username || ''
-                })
-            });
+                this.syncSystem.register(sourceId, {
+                    getFields: () => ({
+                        playerNumber: player.playerNumber ?? player.id,
+                        isHuman: player.isHuman,
+                        hand: player.hand.map(c => ({ category: c.category, ingredient: c.ingredient })),
+                        drawnCard: player.drawnCard ? { category: player.drawnCard.category, ingredient: player.drawnCard.ingredient } : null,
+                        discardPile: player.discardPile.map(c => ({ category: c.category, ingredient: c.ingredient })),
+                        sets: player.sets.length,
+                        won: player.won,
+                        score: player.score,
+                        turnCount: player.turnCount,
+                        turnTimer: player.turnTimer,
+                        username: player.username || ''
+                    })
+                });
+            }
         }
     }
 
@@ -372,9 +394,9 @@ getFields: () => ({
 
         // Auto-discard lowest value card
         if (player.hasDrawn && player.drawnCard) {
-            this.gameState.discardCard(player, player.drawnCard);
+            const cardToDiscard = player.drawnCard;
+            this.gameState.discardCard(player, cardToDiscard);
             this.game.audio.play('discard', { volume: 0.2 });
-            player.hand.push(player.drawnCard);
             player.drawnCard = null;
         } else if (player.hand.length > 0) {
             const scored = player.hand.map(c => ({
@@ -536,6 +558,7 @@ getFields: () => ({
 
      endGame() {
         this.rematchState.localRequested = false;
+        this._guestWantsRematch = false;
         this.state = "GAME_OVER";
         this.game.gameState = "gameOver";
 
@@ -566,8 +589,25 @@ getFields: () => ({
         this.rematchState.localRequested = true;
         this.state = "REMATCH_PENDING";
         this.game.gameState = "rematchPending";
-        this.checkRematchConditions();
+
+        if (this.isHost) {
+            this.checkRematchConditions();
+        } else {
+            this.sendRematchRequest();
+        }
         return true;
+    }
+
+    sendRematchRequest() {
+        if (!this.networkManager || !this.networkManager.isInRoom()) return;
+        this.networkManager.send({ type: "rematch" });
+    }
+
+    handleRematchRequest(message) {
+        this.rematchState.localRequested = true;
+        this.state = "REMATCH_PENDING";
+        this.game.gameState = "rematchPending";
+        this.checkRematchConditions();
     }
 
     cancelRematch() {
@@ -577,13 +617,18 @@ getFields: () => ({
     }
 
     checkRematchConditions() {
-        if (this.state !== "REMATCH_PENDING" && this.state !== "GAME_OVER") return;
+        if (this.state !== "REMATCH_PENDING") return;
 
-        const remoteMatch = this.syncSystem ? this.syncSystem.getRemote("match") : null;
-        const remoteWantsRematch = remoteMatch ? remoteMatch.wantsRematch : false;
-
-        if (this.rematchState.localRequested && remoteWantsRematch) {
-            this.startRematch();
+        if (this.isHost) {
+            // Host checks if guest wants rematch via message flag
+            if (this.rematchState.localRequested && this._guestWantsRematch) {
+                this.startRematch();
+            }
+        } else {
+            // Guest checks if host wants rematch
+            if (this.rematchState.localRequested) {
+                this.startRematch();
+            }
         }
     }
 
@@ -634,20 +679,31 @@ getFields: () => ({
                 this.gameState.drawFromDeck(player);
                 this.game.applySpeedToCard(player.drawnCard);
                 this.game.audio.play('draw', { volume: 0.2 });
+                this.game.turnPhase = 'discard';
+                this.game.bestSets = this.gameState.findBestSets(player.getAllCards(), HOTPOT.GAME.SETS_TO_WIN);
+                for (const c of player.getAllCards()) c.highlighted = null;
+                for (const set of this.game.bestSets) {
+                    const type = set[0].ingredient === set[1].ingredient ? 'triple' : 'category';
+                    for (const c of set) c.highlighted = type;
+                }
             }
-        } else if (action === "win") {
-            player.won = true;
-            this.endGame();
-            return;
         } else if (action === "drawDiscard") {
-            // message.sourcePlayerIndex tells us which discard pile to steal from
             const sourcePlayer = this.game.state.players[message.sourcePlayerIndex];
             if (sourcePlayer && !player.hasDrawn && sourcePlayer.discardPile.length > 0) {
                 this.gameState.drawFromDiscard(player, sourcePlayer);
                 this.game.applySpeedToCard(player.drawnCard);
                 this.game.audio.play('draw', { volume: 0.2 });
+                this.game.turnPhase = 'discard';
+                this.game.bestSets = this.gameState.findBestSets(player.getAllCards(), HOTPOT.GAME.SETS_TO_WIN);
+                for (const c of player.getAllCards()) c.highlighted = null;
+                for (const set of this.game.bestSets) {
+                    const type = set[0].ingredient === set[1].ingredient ? 'triple' : 'category';
+                    for (const c of set) c.highlighted = type;
+                }
             }
-        } else if (action === "discard") {
+        } else       if (action === "discard") {
+            if (!player.hasDrawn) return;
+
             // Find the card to discard from the player's hand or drawn card
             let cardToDiscard = null;
             if (player.drawnCard && player.drawnCard.category === category && player.drawnCard.ingredient === ingredient) {
@@ -661,13 +717,17 @@ getFields: () => ({
                 }
             }
 
-            if (cardToDiscard) {
-                this.gameState.discardCard(player, cardToDiscard);
-                this.game.audio.play('discard', { volume: 0.2 });
+            if (!cardToDiscard) return;
+
+            const wasDrawnCard = (cardToDiscard === player.drawnCard);
+            this.gameState.discardCard(player, cardToDiscard);
+            this.game.audio.play('discard', { volume: 0.2 });
+            if (!wasDrawnCard) {
                 player.hand.push(player.drawnCard);
-                player.drawnCard = null;
-                player.hasDrawn = false;
-                player.turnCount++;
+            }
+            player.drawnCard = null;
+            player.hasDrawn = false;
+            player.turnCount++;
 
                 // Check if player can win after this discard
                 if (this.gameState.canWin(player)) {
@@ -695,9 +755,10 @@ getFields: () => ({
                 }
             }
         }
-    }
+    
 
-   updateRemotePlayerStates() {
+
+    updateRemotePlayerStates() {
         if (this.isHost) {
             this.assignPlayerSlots();
             return;
@@ -711,6 +772,7 @@ getFields: () => ({
         if (remoteGame) {
             this.gameState.currentPlayerIndex = remoteGame.currentPlayerIndex;
             this.gameState.gamePhase = remoteGame.gamePhase;
+            this.game.turnPhase = remoteGame.turnPhase;
         }
 
        // Sync every player_N source into the corresponding local player slot
@@ -836,11 +898,11 @@ getFields: () => ({
             localPlayer.isLocal = true;
             localPlayer.isRemote = false;
             localPlayer.tablePosition = 'S';
-            this.localPlayerIndex = localPlayer.playerNumber;
+            this.localPlayerIndex = this.game.state.players.indexOf(localPlayer);
             const localNum = localPlayer.playerNumber;
 
             // Assign positions: S=local, then W(local+1), N(local+2), E(local+3) mod 4
-            const positions = ['S', 'W', 'N', 'E'];
+			const positions = ['S', 'W', 'N', 'E'];
             for (const p of this.game.state.players) {
                 const offset = ((p.playerNumber - localNum) % 4 + 4) % 4;
                 p.tablePosition = positions[offset];

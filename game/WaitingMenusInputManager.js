@@ -329,6 +329,14 @@ class HotpotWaitingMenusInputManager {
             this.input.isGamepadButtonJustPressed(0, 3);
     }
 
+    isBack() {
+        return this.input.isKeyJustPressed("Action2") ||
+            this.input.isGamepadButtonJustPressed(1, 0) ||
+            this.input.isGamepadButtonJustPressed(1, 1) ||
+            this.input.isGamepadButtonJustPressed(1, 2) ||
+            this.input.isGamepadButtonJustPressed(1, 3);
+    }
+
     // ---------- Button Registration ----------
 
     registerWaitingMenuButtons() {
