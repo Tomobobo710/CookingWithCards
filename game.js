@@ -20,7 +20,7 @@ class Game {
         this.gameState = 'menu';
         this.turnPhase = 'draw';
         this.bestSets = [];
-        this._botRevealed = false;
+        this._otherPlayersRevealed = false;
         this.debugEnabled = false;
         this.settingsOpen = false;
         this.currentSpeed = parseInt(localStorage.getItem('hotpot_speed')) || 2;
@@ -143,10 +143,10 @@ class Game {
         this.state.players[0].playerNumber = 0;
         this.state.players[0].tablePosition = positions[0];
         for (let i = 1; i < n; i++) {
-            const bot = new NetworkedPlayer(i, 'Bot ' + i, false, 1 + Math.floor(Math.random() * 3));
-            bot.playerNumber = i;
-            bot.tablePosition = positions[i];
-            this.state.players.push(bot);
+            const opponent = new NetworkedPlayer(i, 'Bot ' + i, false, 1 + Math.floor(Math.random() * 3));
+            opponent.playerNumber = i;
+            opponent.tablePosition = positions[i];
+            this.state.players.push(opponent);
         }
         this.playerCount = n;
     }
@@ -208,7 +208,7 @@ class Game {
         this.state.reset();
         this.turnPhase = 'draw';
         this.bestSets = [];
-        this._botRevealed = false;
+        this._otherPlayersRevealed = false;
         this.settingsOpen = false;
     }
 
@@ -239,8 +239,8 @@ class Game {
             this.networkSession.update(dt);
         }
 
-        if (this.gameState === 'gameOver' && !this._botRevealed) {
-            this._botRevealed = true;
+        if (this.gameState === 'gameOver' && !this._otherPlayersRevealed) {
+            this._otherPlayersRevealed = true;
             let skipLocal = false;
             if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
                 skipLocal = true;
@@ -1788,8 +1788,8 @@ class Game {
             this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
             this.gameCtx.font = 'bold 18px Arial';
 
-            const human = this.findLocalPlayer();
-            this.gameCtx.fillText(`Your sets: ${human.sets.length}`, HOTPOT.WIDTH / 2, 210);
+            const localPlayer = this.findLocalPlayer();
+            this.gameCtx.fillText(`Your sets: ${localPlayer.sets.length}`, HOTPOT.WIDTH / 2, 210);
 
             let y = 250;
             for (const p of this.state.players) {

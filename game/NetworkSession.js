@@ -311,9 +311,9 @@ class HotpotNetworkSession {
             const remoteMatch = this.syncSystem ? this.syncSystem.getRemote("match") : null;
             if (remoteMatch && remoteMatch.state === "GAME_OVER") {
                 this.game.gameState = "gameOver";
-                // Flip bot cards for reveal
-                if (!this.game._botRevealed) {
-                    this.game._botRevealed = true;
+                // Flip other player cards for reveal
+                if (!this.game._otherPlayersRevealed) {
+                    this.game._otherPlayersRevealed = true;
                     for (const p of this.game.state.players) {
                         if (p.isLocal) continue;
                         for (const card of p.hand) {
@@ -515,9 +515,9 @@ class HotpotNetworkSession {
 
         this.game.calculateScores();
 
-        // Flip bot cards for reveal
-        if (!this.game._botRevealed) {
-            this.game._botRevealed = true;
+       // Flip other player cards for reveal
+        if (!this.game._otherPlayersRevealed) {
+            this.game._otherPlayersRevealed = true;
             for (const p of this.game.state.players) {
                 if (p.isLocal) continue;
                 for (const card of p.hand) {
@@ -525,13 +525,6 @@ class HotpotNetworkSession {
                     card.flip();
                 }
             }
-        }
-
-        const winner = this.game.state.players.find(p => p.won);
-        const localPlayer = this.game.state.players.find(p => p.isLocal) || this.game.state.players[0];
-        if (!winner || winner !== localPlayer) {
-            // Human lost — flip bot cards
-            this.game._botRevealed = false;
         }
 
         this.game.audio.play('win', { volume: 0.7 });
