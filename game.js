@@ -22,7 +22,8 @@ class Game {
         this.bestSets = [];
         this._otherPlayersRevealed = false;
         this.debugEnabled = false;
-        this.settingsOpen = false;
+  this.settingsOpen = false;
+        this.settingsConfirmOpen = false;
         this.currentSpeed = parseInt(localStorage.getItem('hotpot_speed')) || 2;
         this.settingsButtons = [];
         this.msgY = 110;
@@ -209,7 +210,8 @@ class Game {
         this.turnPhase = 'draw';
         this.bestSets = [];
         this._otherPlayersRevealed = false;
-        this.settingsOpen = false;
+this.settingsOpen = false;
+        this.settingsConfirmOpen = false;
     }
 
     // ---------- Update Loop ----------
@@ -290,6 +292,36 @@ class Game {
         if (this.settingsOpen) {
             if (this.input.isLeftMouseButtonJustPressed()) {
                 const pointer = this.input.getPointerPosition();
+
+                // Confirmation modal buttons
+                if (this.settingsConfirmOpen) {
+                    for (const btn of this.settingsConfirmButtons) {
+                       if (this.pointInRect(pointer, btn)) {
+                            if (btn.action === 'confirmYes') {
+                                this.settingsConfirmOpen = false;
+                                this.settingsOpen = false;
+                                if (this.networkSession) {
+                                    this.networkSession.leave();
+                                    this.networkSession = null;
+                                }
+                                if (this.gui && this.gui.isConnected()) {
+                                    this.gui.getNetManager().disconnect();
+                                    this.gui.currentState = "LOGIN";
+                                    this.gui.selectedIndex = 0;
+                                    this.gui.serverStatus = "UNKNOWN";
+                                    this.gui.serverStatusColor = "#ffff00";
+                                }
+                                this.clearGameState();
+                                this.gameState = 'menu';
+                            } else if (btn.action === 'confirmNo') {
+                                this.settingsConfirmOpen = false;
+                            }
+                            return;
+                        }
+                    }
+                    return;
+                }
+
                 for (const btn of this.settingsButtons) {
                     if (this.pointInRect(pointer, btn)) {
                         if (btn.action === 'close') {
@@ -299,20 +331,8 @@ class Game {
                             localStorage.setItem('hotpot_speed', this.currentSpeed);
                             this.applySpeedToAllCards();
                         } else if (btn.action === 'quit') {
-                            this.settingsOpen = false;
-                            if (this.networkSession) {
-                                this.networkSession.leave();
-                                this.networkSession = null;
-                            }
-                            if (this.gui && this.gui.isConnected()) {
-                                this.gui.getNetManager().disconnect();
-                                this.gui.currentState = "LOGIN";
-                                this.gui.selectedIndex = 0;
-                                this.gui.serverStatus = "UNKNOWN";
-                                this.gui.serverStatusColor = "#ffff00";
-                            }
-                            this.clearGameState();
-                            this.gameState = 'menu';
+                            this.settingsConfirmOpen = true;
+                            return;
                         }
                         return;
                     }
@@ -1041,7 +1061,10 @@ class Game {
         this.drawGameLayer();
         this.drawGUILayer();
         this.drawDebugLayer();
-        if (this.settingsOpen) this.drawSettingsModal();
+        if (this.settingsOpen) {
+            this.drawSettingsModal();
+            if (this.settingsConfirmOpen) this.drawSettingsConfirmModal();
+        }
     }
 
     drawGameLayer() {
@@ -1944,5 +1967,67 @@ class Game {
         this.gameCtx.font = 'bold 13px Arial';
         this.gameCtx.fillText('Close', closeBtn.x + btnW / 2, closeBtn.y + btnH / 2 + 5);
         this.settingsButtons.push(closeBtn);
+    }
+
+    drawSettingsConfirmModal() {
+  this.gameCtx.fillStyle = 'rgba(0,0,0,0.55)';
+        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+
+        const modalX = HOTPOT.WIDTH / 2 - 200;
+        const modalY = HOTPOT.HEIGHT / 2 - 70;
+        const modalW = 400;
+        const modalH = 140;
+
+        this.gameCtx.fillStyle = 'rgb(40, 20, 10)';
+        this.gameCtx.fillRect(modalX, modalY, modalW, modalH);
+        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.lineWidth = 2;
+        this.gameCtx.strokeRect(modalX, modalY, modalW, modalH);
+
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 18px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('Quit Game?', HOTPOT.WIDTH / 2, modalY + 30);
+
+        this.gameCtx.font = '13px Arial';
+        this.gameCtx.fillStyle = '#cccccc';
+if (this.networkSession) {
+            this.gameCtx.fillText('You will be disconnected from the online session.', HOTPOT.WIDTH / 2, modalY + 55);
+        } else {
+            this.gameCtx.fillText('Are you sure you want to quit?', HOTPOT.WIDTH / 2, modalY + 55);
+        }
+
+        const btnW = 120;
+        const btnH = 35;
+        const btnY = modalY + 75;
+        const spacing = 20;
+        const totalW = btnW * 2 + spacing;
+        const startX = HOTPOT.WIDTH / 2 - totalW / 2;
+
+        this.settingsConfirmButtons = [];
+
+        const yesBtn = { x: startX, y: btnY, w: btnW, h: btnH, hovered: false, action: 'confirmYes' };
+        yesBtn.hovered = this.input.isElementHovered('settings_confirm_yes');
+        this.gameCtx.fillStyle = yesBtn.hovered ? '#a00000' : '#444';
+        this.gameCtx.fillRect(yesBtn.x, yesBtn.y, btnW, btnH);
+        this.gameCtx.strokeStyle = '#fff';
+        this.gameCtx.lineWidth = 1;
+        this.gameCtx.strokeRect(yesBtn.x, yesBtn.y, btnW, btnH);
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 13px Arial';
+        this.gameCtx.fillText('Yes', yesBtn.x + btnW / 2, yesBtn.y + btnH / 2 + 5);
+        this.settingsConfirmButtons.push(yesBtn);
+
+        const noBtn = { x: startX + btnW + spacing, y: btnY, w: btnW, h: btnH, hovered: false, action: 'confirmNo' };
+        noBtn.hovered = this.input.isElementHovered('settings_confirm_no');
+        this.gameCtx.fillStyle = noBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.fillRect(noBtn.x, noBtn.y, btnW, btnH);
+        this.gameCtx.strokeStyle = '#fff';
+        this.gameCtx.lineWidth = 1;
+        this.gameCtx.strokeRect(noBtn.x, noBtn.y, btnW, btnH);
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 13px Arial';
+        this.gameCtx.fillText('No', noBtn.x + btnW / 2, noBtn.y + btnH / 2 + 5);
+        this.settingsConfirmButtons.push(noBtn);
     }
 }
