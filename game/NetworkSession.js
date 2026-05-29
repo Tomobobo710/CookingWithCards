@@ -43,42 +43,6 @@ class HotpotNetworkSession {
 
       // Detect P2P mode for sync activation
         if (typeof this.networkManager.getDataChannel === 'function') {
-            const setupChannelHandler = () => {
-                const dc = this.networkManager.getDataChannel();
-                if (dc && dc.readyState === 'open' && !dc._hotpotSyncHandlerSet) {
-                    dc._hotpotSyncHandlerSet = true;
-                    dc.onmessage = (evt) => {
-                        try {
-                            const message = JSON.parse(evt.data);
-                            if (this.syncSystem && message.type === 'syncUpdate') {
-                                this.syncSystem.handleSyncUpdate(message);
-                            }
-                            // Route all other messages to the GUI's custom handler system
-                            if (this.game && this.game.gui && message.type !== 'syncUpdate') {
-                                const handler = this.game.gui.customMessageHandlers?.get(message.type);
-                                if (handler) {
-                                    try {
-                                        handler(message);
-                                    } catch (e) {
-                                        console.error(`[NetworkSession] Error in handler '${message.type}':`, e);
-                                    }
-                                }
-                            }
-                        } catch (e) {
-                            // ignore
-                        }
-                    };
-                }
-            };
-
-            // Try immediately (guest case - channel already open)
-            setupChannelHandler();
-
-            // Also set up on joinedRoom in case host creates room first
-            this.networkManager.on('joinedRoom', () => {
-                setupChannelHandler();
-            });
-
             this.networkManager.on('syncUpdate', (msg) => {
                 if (this.syncSystem) {
                     this.syncSystem.handleSyncUpdate(msg);
