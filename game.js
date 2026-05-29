@@ -398,23 +398,22 @@ class Game {
             this.applySpeedToCard(card);
         }
 
-        // Deal animation: animate human hand cards from deck to hand
+      // Deal animation: animate all hands from deck to final positions with spin
         const humanRects = this.getHandCardRects(0);
         for (let i = 0; i < this.state.players[0].hand.length; i++) {
             const rect = humanRects[i];
             const card = this.state.players[0].hand[i];
             card.moveTo(rect.x, rect.y);
-            card.rotation = 0;
-            card.targetRotation = Math.PI * 2;
+            card.rotation = Math.PI * 2;
+            card.targetRotation = 0;
         }
 
-        // Set bot hand rotations with spin
         for (let i = 1; i < this.state.players.length; i++) {
             const ha = i === 1 ? Math.PI / 2 : (i === 2 ? Math.PI : -Math.PI / 2);
             for (const card of this.state.players[i].hand) {
                 this.applySpeedToCard(card);
-                card.rotation = ha;
-                card.targetRotation = ha + Math.PI * 2;
+                card.rotation = ha + Math.PI * 2;
+                card.targetRotation = ha;
             }
         }
     }
@@ -775,8 +774,8 @@ class Game {
                 const botIdx = this.state.players.indexOf(actingPlayer);
                 const ha = botIdx === 1 ? Math.PI / 2 : (botIdx === 2 ? Math.PI : -Math.PI / 2);
                 this.applySpeedToCard(actingPlayer.drawnCard);
-                actingPlayer.drawnCard.rotation = ha;
-                actingPlayer.drawnCard.rotateTo(ha + Math.PI * 2 * 3); // 3 full spins → ends at ha
+                actingPlayer.drawnCard.rotation = ha + Math.PI * 2 * 3;
+                actingPlayer.drawnCard.rotateTo(ha);
                 actingPlayer.drawnCard.scaleTo(0.375);
             }
             actingPlayer.hand.push(actingPlayer.drawnCard);
@@ -840,7 +839,7 @@ class Game {
         // Equidistant NESW around screen center, 120px from center
         const cx = HOTPOT.WIDTH / 2;
         const cy = HOTPOT.HEIGHT / 2;
-        const dist = 120;
+        const dist = 100;
         const hw = HOTPOT.UI.CARD_WIDTH / 2;
         const hh = HOTPOT.UI.CARD_HEIGHT / 2;
         const positions = [
@@ -1036,11 +1035,6 @@ class Game {
                 this.gameCtx.strokeRect(rect.x, rect.y, rect.w, rect.h);
             }
 
-            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-            this.gameCtx.font = '11px Arial';
-            this.gameCtx.textAlign = 'center';
-            this.gameCtx.fillText(p.name, rect.x + rect.w / 2, rect.y - 6);
-
             if (canClick) {
                 this.gameCtx.fillStyle = '#ffcc00';
                 this.gameCtx.font = '10px Arial';
@@ -1115,7 +1109,7 @@ class Game {
         this.gameCtx.font = 'bold 14px Arial';
         this.gameCtx.textAlign = 'left';
         this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(`${player.name} — Hand: ${player.hand.length}`, HOTPOT.WIDTH / 2, HOTPOT.HEIGHT - 10);
+        this.gameCtx.fillText('Your Hand', HOTPOT.WIDTH / 2, HOTPOT.HEIGHT - 10);
 
         if (this.bestSets.length > 0) {
             this.gameCtx.fillStyle = '#90ee90';
@@ -1181,7 +1175,7 @@ class Game {
 
         // Mini info label at each bot's edge
         const cfgLbl = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
-        const info = `${player.name} [${cfgLbl.desc}]  ${player.sets.length}set  ${cards.length}crds`;
+        const info = `${player.name} [${cfgLbl.desc}]`;
         this.gameCtx.font = '10px Arial';
         this.gameCtx.textBaseline = 'middle';
         if (index === 1) {
