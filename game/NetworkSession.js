@@ -304,8 +304,9 @@ class HotpotNetworkSession {
                         playerNumber: player.playerNumber ?? player.id,
                         isHuman: player.isHuman,
                         hand: player.hand.map(c => ({ category: c.category, ingredient: c.ingredient })),
-                        drawnCard: player.drawnCard ? { category: player.drawnCard.category, ingredient: player.drawnCard.ingredient } : null,
+                        drawnCard: player.drawnCard ? { category: player.drawnCard.category, ingredient: player.drawnCard.ingredient, drawSourcePlayer: player.drawSourcePlayer } : null,
                         discardPile: player.discardPile.map(c => ({ category: c.category, ingredient: c.ingredient })),
+                        lastDiscard: player.lastDiscard || null,
                         sets: player.sets.length,
                         won: player.won,
                         score: player.score,
@@ -764,8 +765,19 @@ class HotpotNetworkSession {
             return;
         }
 
-        // Guest: use our pre-assigned player index
+       // Guest: use our pre-assigned player index
         const myPlayerIndex = this.localPlayerIndex || 0;
+
+        // Compute screen positions the same way game.js does
+        const cx = HOTPOT.WIDTH / 2;
+        const cy = HOTPOT.HEIGHT / 2;
+        const gap = 50;
+        const hw = HOTPOT.UI.CARD_WIDTH / 2;
+        const hh = HOTPOT.UI.CARD_HEIGHT / 2;
+        const distV = hh + gap;
+        const distH = hw + gap / 2 + 12.5;
+        const seatMap = { 0: { x: cx - hw, y: cy + distV - hh }, 1: { x: cx - distH - hw, y: cy - hh }, 2: { x: cx - hw, y: cy - distV - hh }, 3: { x: cx + distH - hw, y: cy - hh } };
+        const deckRect = { x: cx - hw, y: cy - hh };
 
         // Sync game state from host
         const remoteGame = this.syncSystem ? this.syncSystem.getRemote("game") : null;
@@ -820,7 +832,9 @@ class HotpotNetworkSession {
                             localPlayer.hand[j].frontColor = '#ffffff';
                         }
                     } else {
-                        localPlayer.hand[j] = new Card(hc.category, hc.ingredient, null, 0.5);
+                        const nc = new Card(hc.category, hc.ingredient, null, 0.5);
+                        nc.x = deckRect.x; nc.y = deckRect.y;
+                        localPlayer.hand[j] = nc;
                     }
                 }
                 if (localPlayer.hand.length > remoteData.hand.length) {
@@ -828,10 +842,19 @@ class HotpotNetworkSession {
                 }
             }
 
-            // Sync drawn card (preserve object if possible)
+           // Sync drawn card (preserve object if possible)
             if (remoteData.drawnCard) {
                 if (!localPlayer.drawnCard) {
-                    localPlayer.drawnCard = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, null, 0.5);
+                    const nc = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, null, 0.5);
+                    const src = remoteData.drawnCard.drawSourcePlayer;
+                    if (src === -1) {
+                        nc.x = deckRect.x; nc.y = deckRect.y;
+                    } else if (typeof src === 'number' && seatMap[src]) {
+                        nc.x = seatMap[src].x; nc.y = seatMap[src].y;
+                    } else {
+                        throw new Error('[NetworkSession] Cannot create drawn card without valid source position');
+                    }
+                    localPlayer.drawnCard = nc;
                 } else {
                     localPlayer.drawnCard.category = remoteData.drawnCard.category;
                     localPlayer.drawnCard.ingredient = remoteData.drawnCard.ingredient;
@@ -849,10 +872,13 @@ class HotpotNetworkSession {
                 localPlayer.drawnCard = null;
             }
 
-            // Sync discard pile (preserve objects)
+      // Sync discard pile (preserve objects)
             if (Array.isArray(remoteData.discardPile)) {
                 while (localPlayer.discardPile.length < remoteData.discardPile.length) {
-                    localPlayer.discardPile.push(new Card('', '', null, 0.75));
+                    const nc = new Card('', '', null, 0.75);
+                    const seat = seatMap[i];
+                    nc.x = seat.x; nc.y = seat.y;
+                    localPlayer.discardPile.push(nc);
                 }
                 for (let j = 0; j < remoteData.discardPile.length; j++) {
                     const dc = remoteData.discardPile[j];

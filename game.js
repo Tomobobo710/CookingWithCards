@@ -873,7 +873,7 @@ class Game {
     }
 
     getDrawnCardRectForPlayer(player) {
-       const cardScale = 0.5;
+        const cardScale = 0.5;
         const fw = 80 * cardScale;
         const fh = 115 * cardScale;
         const spacing = 6;
@@ -1516,7 +1516,7 @@ class Game {
         const cards = player.hand;
         if (cards.length === 0) return;
 
-       const cardScale = 0.5625;
+       const cardScale = 0.5;
         const spacing = 6;
         const fw = 80 * cardScale;
         const fh = 115 * cardScale;
@@ -1557,11 +1557,28 @@ class Game {
             card.draw(this.gameCtx);
         }
 
-        if (player.drawnCard) {
+       if (player.drawnCard) {
             const dc = player.drawnCard;
             dc.scaleTo(cardScale);
             if (this.gameState !== 'gameOver') dc.faceUp = false;
             dc.rotateTo(handAngle);
+
+            const totalH = cards.length * fh + (cards.length - 1) * spacing;
+            const totalW = cards.length * fw + (cards.length - 1) * spacing;
+
+            let dcx, dcy;
+            if (index === 1) {
+                dcx = fw / 2 + 12 + fw + 8 + fw / 2;
+                dcy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * fh) / 2;
+            } else if (index === 2) {
+                dcx = (HOTPOT.WIDTH - totalW) / 2 + (cards.length * fw) / 2;
+                dcy = fh / 2 + 10 + fh + 8 + fh / 2;
+            } else {
+                dcx = HOTPOT.WIDTH - fw / 2 - 12 - fw - 8 - fw / 2;
+                dcy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * fh) / 2;
+            }
+            dc.moveTo(dcx - fw / 2, dcy - fh / 2);
+
             dc.draw(this.gameCtx);
         }
 

@@ -80,6 +80,7 @@ class GameState {
         card.faceUp = false;
         player.drawnCard = card;
         player.hasDrawn = true;
+        player.drawSourcePlayer = -1;
         return card;
     }
 
@@ -98,6 +99,7 @@ class GameState {
         const card = sourcePlayer.discardPile.pop();
         player.drawnCard = card;
         player.hasDrawn = true;
+        player.drawSourcePlayer = sourcePlayer.id;
         return card;
     }
 
@@ -109,6 +111,7 @@ class GameState {
             removed = true;
         } else if (player.drawnCard === card) {
             player.drawnCard = null;
+            player.drawSourcePlayer = undefined;
             removed = true;
         }
         if (removed) {
@@ -119,6 +122,7 @@ class GameState {
             const extraSpins = Math.PI * 2 * (1 + Math.floor(Math.random() * 1.5));
             card.rotateTo(card.rotation + toZero + extraSpins);
             player.discardPile.push(card);
+            player.lastDiscard = { category: card.category, ingredient: card.ingredient, source: handIdx >= 0 ? 'hand' : 'drawnCard', handIndex: handIdx >= 0 ? handIdx : -1 };
         }
         return removed;
     }

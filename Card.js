@@ -57,7 +57,7 @@ class Card {
         this.backPattern = '#1a1a2e';
     }
 
-    moveTo(x, y, immediate = false) {
+   moveTo(x, y, immediate = false) {
         this.targetX = x;
         this.targetY = y;
         if (immediate) { this.x = x; this.y = y; }
@@ -70,7 +70,7 @@ class Card {
         else this.animating = true;
     }
 
-    scaleTo(newScale, immediate = false) {
+  scaleTo(newScale, immediate = false) {
         this.targetScale = newScale;
         if (immediate) {
             this.scale = newScale;
