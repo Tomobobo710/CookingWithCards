@@ -1407,7 +1407,8 @@ class Game {
                 deckLength = remoteGame.deckCount;
             }
         } else {
-            isMyTurn = player && player.isHuman;
+            const localPlayer = this.findLocalPlayer();
+            isMyTurn = player === localPlayer;
         }
         const isClickable = isMyTurn && this.turnPhase === 'draw' && deckLength > 0;
 
