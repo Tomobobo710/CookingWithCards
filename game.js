@@ -61,6 +61,13 @@ const HOTPOT = {
         1: { stealThreshold: 50, discardIndex: 1, desc: 'Easy' },
         2: { stealThreshold: 20, discardIndex: 0, desc: 'Medium' },
         3: { stealThreshold: -5, discardIndex: 0, desc: 'Hard' }
+    },
+
+   SPEEDS: {
+        1: { name: 'Slow',   move: 0.05, rotate: 0.05, scale: 0.05, flip: 0.035, botDelay: 120, thinkExtra: 240, msgDuration: 8 },
+        2: { name: 'Medium', move: 0.10, rotate: 0.10, scale: 0.10, flip: 0.07,  botDelay: 60,  thinkExtra: 120, msgDuration: 5 },
+        3: { name: 'Fast',   move: 0.20, rotate: 0.20, scale: 0.20, flip: 0.14,  botDelay: 30,  thinkExtra: 60,  msgDuration: 3 },
+        4: { name: 'Ultra',  move: 0.50, rotate: 0.50, scale: 0.50, flip: 0.35,  botDelay: 10,  thinkExtra: 0,   msgDuration: 1 }
     }
 };
 
@@ -137,7 +144,9 @@ class GameState {
             player.discardPile = [];
             for (let i = 0; i < HOTPOT.GAME.INITIAL_HAND; i++) {
                 if (this.deck.length > 0) {
-                    player.hand.push(this.deck.pop());
+                    const card = this.deck.pop();
+                    card.moveTo(HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2);
+                    player.hand.push(card);
                 }
             }
         }
@@ -277,6 +286,9 @@ class Game {
         this.bestSets = [];
         this._botRevealed = false;
         this.debugEnabled = false;
+        this.settingsOpen = false;
+        this.currentSpeed = parseInt(localStorage.getItem('hotpot_speed')) || 2;
+        this.settingsButtons = [];
 
         this.setupPlayers();
         this.setupUI();
@@ -284,6 +296,29 @@ class Game {
 
         this.animationTime = 0;
         this.lastTime = performance.now();
+    }
+
+    getSpeedConfig() {
+        return HOTPOT.SPEEDS[this.currentSpeed] || HOTPOT.SPEEDS[2];
+    }
+
+    applySpeedToCard(card) {
+        const s = this.getSpeedConfig();
+        card.moveSpeed = s.move;
+        card.rotateSpeed = s.rotate;
+        card.scaleSpeed = s.scale;
+        card.flipSpeed = s.flip;
+    }
+
+    applySpeedToAllCards() {
+        for (const player of this.state.players) {
+            for (const card of player.hand) {
+                this.applySpeedToCard(card);
+            }
+            if (player.drawnCard) {
+                this.applySpeedToCard(player.drawnCard);
+            }
+        }
     }
 
     setupPlayers() {
@@ -310,6 +345,8 @@ class Game {
         this.input.registerElement('eat_button', {
             bounds: () => ({ x: this.eatButton.x, y: this.eatButton.y, width: this.eatButton.width, height: this.eatButton.height })
         });
+
+        this.settingsButton = { x: HOTPOT.WIDTH - 90, y: 10, w: 80, h: 30, hovered: false };
     }
 
     setupAudio() {
@@ -335,12 +372,28 @@ class Game {
         this.bestSets = [];
         this._botRevealed = false;
 
-        // Set bot hand rotations
+        // Apply speed to all deck cards
+        for (const card of this.state.deck) {
+            this.applySpeedToCard(card);
+        }
+
+        // Deal animation: animate human hand cards from deck to hand
+        const humanRects = this.getHandCardRects(0);
+        for (let i = 0; i < this.state.players[0].hand.length; i++) {
+            const rect = humanRects[i];
+            const card = this.state.players[0].hand[i];
+            card.moveTo(rect.x, rect.y);
+            card.rotation = 0;
+            card.targetRotation = Math.PI * 2;
+        }
+
+        // Set bot hand rotations with spin
         for (let i = 1; i < this.state.players.length; i++) {
             const ha = i === 1 ? Math.PI / 2 : (i === 2 ? Math.PI : -Math.PI / 2);
             for (const card of this.state.players[i].hand) {
+                this.applySpeedToCard(card);
                 card.rotation = ha;
-                card.targetRotation = ha;
+                card.targetRotation = ha + Math.PI * 2;
             }
         }
     }
@@ -404,6 +457,25 @@ class Game {
             this.debugEnabled = !this.debugEnabled;
         }
 
+        if (this.settingsOpen) {
+            if (this.input.isLeftMouseButtonJustPressed()) {
+                const pointer = this.input.getPointerPosition();
+                for (const btn of this.settingsButtons) {
+                    if (this.pointInRect(pointer, btn)) {
+                        if (btn.action === 'close') {
+                            this.settingsOpen = false;
+                        } else if (btn.action === 'speed') {
+                            this.currentSpeed = (this.currentSpeed % Object.keys(HOTPOT.SPEEDS).length) + 1;
+                            localStorage.setItem('hotpot_speed', this.currentSpeed);
+                            this.applySpeedToAllCards();
+                        }
+                        return;
+                    }
+                }
+            }
+            return;
+        }
+
         if (this.gameState === 'menu') {
             this.menuButton.hovered = this.input.isElementHovered('menu_button');
             if (this.input.isElementJustPressed('menu_button')) {
@@ -441,7 +513,8 @@ class Game {
         const deckRect = this.getDeckRect();
         if (this.pointInRect(pointer, deckRect) && this.state.deck.length > 0) {
             const card = this.state.deck[this.state.deck.length - 1];
-            card.moveTo(deckRect.x, deckRect.y, true);
+            this.applySpeedToCard(card);
+            card.moveTo(deckRect.x, deckRect.y);
             card.faceUp = false;
             this.state.drawFromDeck(player);
             card.flip();
@@ -456,7 +529,8 @@ class Game {
             const rect = this.getDiscardRect(i);
             if (this.pointInRect(pointer, rect)) {
                 const card = other.discardPile[other.discardPile.length - 1];
-                card.moveTo(rect.x, rect.y, true);
+                this.applySpeedToCard(card);
+                card.moveTo(rect.x, rect.y);
                 this.state.drawFromDiscard(player, other);
                 this.audio.play('draw', { volume: 0.3 });
                 this.afterHumanDraw(player);
@@ -500,6 +574,7 @@ class Game {
 
         for (let i = 0; i < player.hand.length; i++) {
             if (this.pointInRect(pointer, handCards[i])) {
+                this.applySpeedToCard(player.hand[i]);
                 this.state.discardCard(player, player.hand[i]);
                 this.audio.play('discard', { volume: 0.3 });
                 this.endTurn();
@@ -510,6 +585,7 @@ class Game {
         if (player.drawnCard) {
             const drawnRect = this.getDrawnCardRect();
             if (this.pointInRect(pointer, drawnRect)) {
+                this.applySpeedToCard(player.drawnCard);
                 this.state.discardCard(player, player.drawnCard);
                 this.audio.play('discard', { volume: 0.3 });
                 this.endTurn();
@@ -595,7 +671,8 @@ class Game {
         }
 
         player.botTimer += 1;
-        if (player.botTimer < 60) return;
+        const speedCfg = this.getSpeedConfig();
+        if (player.botTimer < speedCfg.botDelay + speedCfg.thinkExtra) return;
 
         player.turnCount++;
 
@@ -625,10 +702,14 @@ class Game {
 
         if (bestStealTarget && bestStealValue >= cfg.stealThreshold) {
             this.state.drawFromDiscard(player, bestStealTarget);
+            this.applySpeedToCard(player.drawnCard);
         } else if (this.state.deck.length > 0) {
             this.state.drawFromDeck(player);
+            this.applySpeedToCard(player.drawnCard);
+            player.drawnCard.moveTo(HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2);
         } else if (bestStealTarget) {
             this.state.drawFromDiscard(player, bestStealTarget);
+            this.applySpeedToCard(player.drawnCard);
         } else {
             this.endTurn();
             return;
@@ -656,6 +737,7 @@ class Game {
         const discardIdx = Math.min(cfg.discardIndex, scored.length - 1);
         const discardCard = scored[discardIdx].card;
 
+        this.applySpeedToCard(discardCard);
         this.state.discardCard(player, discardCard);
         this.audio.play('discard', { volume: 0.2 });
         this.endTurn();
@@ -671,6 +753,7 @@ class Game {
             if (!actingPlayer.isHuman) {
                 const botIdx = this.state.players.indexOf(actingPlayer);
                 const ha = botIdx === 1 ? Math.PI / 2 : (botIdx === 2 ? Math.PI : -Math.PI / 2);
+                this.applySpeedToCard(actingPlayer.drawnCard);
                 actingPlayer.drawnCard.rotation = ha;
                 actingPlayer.drawnCard.rotateTo(ha + Math.PI * 2 * 3); // 3 full spins → ends at ha
                 actingPlayer.drawnCard.scaleTo(0.375);
@@ -803,6 +886,7 @@ class Game {
         this.drawGameLayer();
         this.drawGUILayer();
         this.drawDebugLayer();
+        if (this.settingsOpen) this.drawSettingsModal();
     }
 
     drawGameLayer() {
@@ -855,6 +939,7 @@ class Game {
 
         this.drawDeck();
         this.drawDiscardPiles();
+        this.drawSettingsButton();
 
         for (let i = 0; i < this.state.players.length; i++) {
             const p = this.state.players[i];
@@ -942,6 +1027,27 @@ class Game {
         }
     }
 
+    drawSettingsButton() {
+        if (this.settingsOpen) return;
+        const btn = this.settingsButton;
+        const pointer = this.input.getPointerPosition();
+        btn.hovered = pointer.x >= btn.x && pointer.x <= btn.x + btn.w && pointer.y >= btn.y && pointer.y <= btn.y + btn.h;
+
+        this.gameCtx.fillStyle = btn.hovered ? HOTPOT.COLORS.HIGHLIGHT : 'rgba(60,30,15,0.8)';
+        this.gameCtx.fillRect(btn.x, btn.y, btn.w, btn.h);
+        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.lineWidth = 1;
+        this.gameCtx.strokeRect(btn.x, btn.y, btn.w, btn.h);
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 12px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('⚙ Settings', btn.x + btn.w / 2, btn.y + btn.h / 2 + 4);
+
+        if (this.input.isLeftMouseButtonJustPressed() && btn.hovered) {
+            this.settingsOpen = true;
+        }
+    }
+
     drawHumanHand(player) {
         const handRects = this.getHandCardRects(0);
 
@@ -987,7 +1093,8 @@ class Game {
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 14px Arial';
         this.gameCtx.textAlign = 'left';
-        this.gameCtx.fillText(`${player.name} — Hand: ${player.hand.length}`, 10, HOTPOT.UI.HAND_Y - 20);
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText(`${player.name} — Hand: ${player.hand.length}`, HOTPOT.WIDTH / 2, HOTPOT.HEIGHT - 10);
 
         if (this.bestSets.length > 0) {
             this.gameCtx.fillStyle = '#90ee90';
@@ -1205,5 +1312,75 @@ class Game {
             `P0 drawn: ${this.state.players[0] && this.state.players[0].drawnCard ? 'yes' : 'no'}`
         ];
         lines.forEach((l, i) => this.debugCtx.fillText(l, 10, 20 + i * 14));
+    }
+
+    drawSettingsModal() {
+        this.gameCtx.fillStyle = 'rgba(0,0,0,0.7)';
+        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+
+        const modalX = HOTPOT.WIDTH / 2 - 150;
+        const modalY = HOTPOT.HEIGHT / 2 - 120;
+        const modalW = 300;
+        const modalH = 240;
+
+        this.gameCtx.fillStyle = HOTPOT.COLORS.UI_BG;
+        this.gameCtx.fillRect(modalX, modalY, modalW, modalH);
+        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.lineWidth = 2;
+        this.gameCtx.strokeRect(modalX, modalY, modalW, modalH);
+
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 20px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('Settings', HOTPOT.WIDTH / 2, modalY + 35);
+
+        const speedCfg = this.getSpeedConfig();
+        this.gameCtx.font = '14px Arial';
+        this.gameCtx.fillText(`Speed: ${speedCfg.name}`, HOTPOT.WIDTH / 2, modalY + 70);
+
+        const btnW = 120;
+        const btnH = 35;
+        const btnY = modalY + 90;
+
+        this.settingsButtons = [];
+
+        // Speed button
+        const speedBtn = { x: HOTPOT.WIDTH / 2 - btnW / 2, y: btnY, w: btnW, h: btnH, hovered: false, action: 'speed' };
+        speedBtn.hovered = this.input.isElementHovered('settings_speed') || this.input.isElementHovered('settings_speed');
+        this.gameCtx.fillStyle = speedBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.fillRect(speedBtn.x, speedBtn.y, btnW, btnH);
+        this.gameCtx.strokeStyle = '#fff';
+        this.gameCtx.lineWidth = 1;
+        this.gameCtx.strokeRect(speedBtn.x, speedBtn.y, btnW, btnH);
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 13px Arial';
+        this.gameCtx.fillText('Change Speed', speedBtn.x + btnW / 2, speedBtn.y + btnH / 2 + 5);
+        this.settingsButtons.push(speedBtn);
+
+        // Close button
+        const closeBtn = { x: HOTPOT.WIDTH / 2 - btnW / 2, y: btnY + 45, w: btnW, h: btnH, hovered: false, action: 'close' };
+        closeBtn.hovered = this.input.isElementHovered('settings_close') || this.input.isElementHovered('settings_close');
+        this.gameCtx.fillStyle = closeBtn.hovered ? '#a00000' : '#444';
+        this.gameCtx.fillRect(closeBtn.x, closeBtn.y, btnW, btnH);
+        this.gameCtx.strokeStyle = '#fff';
+        this.gameCtx.lineWidth = 1;
+        this.gameCtx.strokeRect(closeBtn.x, closeBtn.y, btnW, btnH);
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 13px Arial';
+        this.gameCtx.fillText('Close', closeBtn.x + btnW / 2, closeBtn.y + btnH / 2 + 5);
+        this.settingsButtons.push(closeBtn);
+
+        // Draw speed options
+        this.gameCtx.font = '11px Arial';
+        this.gameCtx.fillStyle = '#888';
+        const speedKeys = Object.keys(HOTPOT.SPEEDS);
+        let speedX = modalX + 45;
+        for (const key of speedKeys) {
+            const s = HOTPOT.SPEEDS[key];
+            const isActive = key == this.currentSpeed;
+            this.gameCtx.fillStyle = isActive ? HOTPOT.COLORS.HIGHLIGHT : '#888';
+            this.gameCtx.fillText(`${s.name} (${key})`, speedX, modalY + modalH - 15);
+            speedX += 70;
+        }
     }
 }
