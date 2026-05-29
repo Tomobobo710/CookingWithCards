@@ -114,10 +114,17 @@ class HotpotNetworkSession {
             }
         });
 
-         // Listen for disconnections (only host processes this)
+          // Listen for disconnections (only host processes this)
         this.networkManager.on("userLeft", (user) => {
             if (this.isHost) {
                 this.handleOpponentLeft(user);
+            }
+        });
+
+        // Listen for new user connections
+        this.networkManager.on("userJoined", (user) => {
+            if (this.isHost) {
+                this.handleOpponentJoined(user);
             }
         });
 
@@ -974,76 +981,68 @@ class HotpotNetworkSession {
         }
     }
 
-  assignPlayerSlots() {
+    assignPlayerSlots() {
         const users = this.networkManager.getConnectedUsers();
         if (!users || users.length === 0) return;
 
-        // Build a set of connected usernames for quick lookup
-        const connectedUsernames = new Set();
-        for (const user of users) {
-            connectedUsernames.add(user.username);
-        }
-
-        // First pass: mark which connected users are already in a slot (preserve their slot)
-        const occupiedSlots = new Set();
+        // Reset all players
         for (let i = 0; i < this.game.state.players.length; i++) {
-            const p = this.game.state.players[i];
-            if (p.isHuman && connectedUsernames.has(p.username)) {
-                occupiedSlots.add(i);
-            }
-        }
-
-        // Second pass: assign connected users to remaining slots
-        let userIndex = 0;
-        for (let i = 0; i < this.game.state.players.length; i++) {
-            const p = this.game.state.players[i];
-
-            if (occupiedSlots.has(i)) {
-                // Already occupied by a connected user — keep them
-                p.playerNumber = i;
-                continue;
-            }
-
-            // Assign next available connected user
-            if (userIndex < users.length) {
-                const user = users[userIndex];
-                p.playerNumber = i;
-                p.username = user.username;
-                p.name = user.username;
-                p.isHuman = true;
-                userIndex++;
-            } else {
-                // No more users — fill with bot, clean everything
-                p.playerNumber = i;
-                p.username = '';
-                p.name = 'Bot ' + (i + 1);
-                p.isHuman = false;
-                p.tablePosition = HOTPOT.POSITIONS[i] || 'S';
-            }
-        }
-
-        // Third pass: clean up slots beyond connected users — full bot reset
-        for (let i = userIndex; i < this.game.state.players.length; i++) {
             const p = this.game.state.players[i];
             p.playerNumber = i;
             p.username = '';
-            p.name = 'Bot ' + (i + 1);
+            p.name = '';
             p.isHuman = false;
-            p.tablePosition = HOTPOT.POSITIONS[i] || 'S';
+            p.isRemote = false;
         }
 
-        // Fourth pass: ensure all bots have valid tablePosition
-        for (let i = 0; i < this.game.state.players.length; i++) {
+        // Map each connected user to a player slot
+        let slot = 0;
+        for (const user of users) {
+            if (slot >= this.game.state.players.length) break;
+            const p = this.game.state.players[slot];
+            p.playerNumber = slot;
+            p.username = user.username;
+            p.name = user.username;
+            p.isHuman = true;  // real humans, not bots
+            p.isRemote = (slot !== 0); // Slot 0 is always the local host
+            slot++;
+        }
+
+        // Fill remaining slots with bots
+        for (let i = slot; i < this.game.state.players.length; i++) {
             const p = this.game.state.players[i];
-            if (!p.tablePosition) {
-                p.tablePosition = HOTPOT.POSITIONS[i] || 'S';
-            }
+            p.playerNumber = i;
+            p.name = 'Bot ' + (i + 1);
+            p.username = 'Bot ' + (i + 1);
+            p.isHuman = false;
+            p.isRemote = false; // bots are handled locally by the host
+            p.botStarted = false;
         }
+    }
 
-        // Rebuild remotePlayers array from player slots
-        this.remotePlayers = [];
-        for (let i = 1; i < this.game.state.players.length; i++) {
-            this.remotePlayers.push(this.game.state.players[i]);
+    updateRemotePlayerNames(users) {
+        this.assignPlayerSlots();
+    }
+
+    handleOpponentJoined(user) {
+        // Find the first slot that is a bot and replace it with the new human user
+        for (let i = 0; i < this.remotePlayers.length; i++) {
+            const p = this.remotePlayers[i];
+            if (!p.isHuman) {
+                // If it is currently their turn, skip it
+                const playerIndex = i + 1;
+                const wasCurrentTurn = (this.gameState.currentPlayerIndex === playerIndex);
+
+                p.isHuman = true;
+                p.isRemote = true;
+                p.username = user.username;
+                p.name = user.username;
+
+                if (wasCurrentTurn && this.state === "PLAYING") {
+                    this.forceSkipTurn();
+                }
+                break;
+            }
         }
     }
 
@@ -1051,19 +1050,14 @@ class HotpotNetworkSession {
         const currentState = this.state;
 
         if (currentState === "WAITING" || currentState === "CANCELLED") {
+            // Just replace with bot
             this.replacePlayerWithBot(user);
             return;
         }
 
         if (currentState === "PLAYING") {
-            // Replace with bot
+            // Replace with bot, game continues
             this.replacePlayerWithBot(user);
-
-            // If the disconnected player was the current player, skip their turn
-            const cp = this.gameState.getCurrentPlayer();
-            if (cp && cp.username === user.username) {
-                this.skipTurn();
-            }
             return;
         }
 
@@ -1080,11 +1074,13 @@ class HotpotNetworkSession {
         this.state = "PLAYING";
         this.game.gameState = "onlineMultiplayer";
 
-        // Reset all bot players (including the one that replaced the disconnected player)
+        // Reset the bot player
         for (const p of this.game.state.players) {
-            if (!p.isHuman) {
-                p.botStarted = false;
+            if (!p.isRemote && !p.isHuman) {
+                p.gameOver = false;
+                p.score = 0;
                 p.turnTimer = 0;
+                p.botStarted = false;
             }
         }
 
@@ -1093,60 +1089,73 @@ class HotpotNetworkSession {
             this.game.countdown.active = false;
             this.game.countdown.phase = "waiting";
         }
-
-        // Reset turn for the current player if they were the one who disconnected
-        const cp = this.gameState.getCurrentPlayer();
-        if (cp && !cp.isHuman) {
-            cp.botStarted = false;
-            cp.turnTimer = 0;
-        }
     }
 
     replacePlayerWithBot(user) {
-        // Find the player slot that matches the disconnected user
-        let leftSlot = -1;
-        for (let i = 0; i < this.game.state.players.length; i++) {
-            const p = this.game.state.players[i];
+        // Find the remote player that left and replace with bot in-place
+        for (let i = 0; i < this.remotePlayers.length; i++) {
+            const p = this.remotePlayers[i];
             if (p.username === user.username || p.name === user.username) {
-                leftSlot = i;
+                // If it is currently their turn, skip it
+                const playerIndex = i + 1;
+                const wasCurrentTurn = (this.gameState.currentPlayerIndex === playerIndex);
+
+                p.isHuman = false;
+                p.isRemote = false;
+                p.username = 'Bot ' + (i + 1);
+                p.name = 'Bot ' + (i + 1);
+                p.botStarted = false;
+
+                if (wasCurrentTurn && this.state === "PLAYING") {
+                    this.forceSkipTurn();
+                }
                 break;
             }
         }
+    }
 
-        if (leftSlot === -1) return;
+    forceSkipTurn() {
+        const player = this.game.state.players[this.gameState.currentPlayerIndex];
+        if (!player) return;
 
-        const leavingPlayer = this.game.state.players[leftSlot];
-
-        // Replace with a bot that inherits the human's game state
-        const botPlayer = new (this.game.state.players[0].constructor)(
-            leftSlot,
-            'Bot ' + (leftSlot + 1),
-            false,
-            1 + Math.floor(Math.random() * 3)
-        );
-        botPlayer.isRemote = false;
-        botPlayer.isLocal = false;
-        botPlayer.playerNumber = leftSlot;
-        botPlayer.tablePosition = leavingPlayer ? leavingPlayer.tablePosition : HOTPOT.POSITIONS[leftSlot];
-        botPlayer.botStarted = false;
-        botPlayer.turnTimer = 0;
-
-        if (leavingPlayer) {
-            botPlayer.hand = leavingPlayer.hand;
-            botPlayer.drawnCard = leavingPlayer.drawnCard;
-            botPlayer.hasDrawn = leavingPlayer.hasDrawn;
-            botPlayer.discardPile = leavingPlayer.discardPile;
-            botPlayer.sets = leavingPlayer.sets;
-            botPlayer.score = leavingPlayer.score;
-            botPlayer.turnCount = leavingPlayer.turnCount;
-            botPlayer.won = leavingPlayer.won;
+        // Auto-draw if needed
+        if (!player.hasDrawn) {
+            if (this.gameState.deck.length > 0) {
+                this.gameState.drawFromDeck(player);
+                this.game.audio.play('draw', { volume: 0.2 });
+            }
         }
 
-        this.game.state.players[leftSlot] = botPlayer;
+        // Auto-discard if needed
+        if (player.hasDrawn && player.drawnCard) {
+            this.gameState.discardCard(player, player.drawnCard);
+            this.game.audio.play('discard', { volume: 0.2 });
+            player.drawnCard = null;
+        } else if (player.hand.length > 0) {
+            const cardToDiscard = player.hand[0];
+            this.gameState.discardCard(player, cardToDiscard);
+            this.game.audio.play('discard', { volume: 0.2 });
+        }
 
-        // Let assignPlayerSlots() handle final slot cleanup, position fixes, and remotePlayers rebuild
-        if (this.isHost) {
-            this.assignPlayerSlots();
+        player.hasDrawn = false;
+        player.turnTimer = 0;
+        this.gameState.currentPlayerIndex = this.gameState.getNextPlayerIndex();
+
+        const nextPlayer = this.gameState.getCurrentPlayer();
+        nextPlayer.hasDrawn = false;
+        nextPlayer.drawnCard = null;
+        nextPlayer.turnTimer = 0;
+
+        if (!nextPlayer.isHuman) {
+            nextPlayer.botStarted = false;
+        }
+
+        this.game.turnPhase = 'draw';
+        this.game.bestSets = [];
+        for (const p of this.game.state.players) {
+            this.game.sortHandByCategory(p);
+            for (const c of p.hand) c.highlighted = null;
+            if (p.drawnCard) p.drawnCard.highlighted = null;
         }
     }
 
