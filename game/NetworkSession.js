@@ -844,17 +844,22 @@ class HotpotNetworkSession {
 
            // Sync discard pile first (before drawnCard is cleared)
             if (Array.isArray(remoteData.discardPile)) {
-                const pileGrew = localPlayer.discardPile.length < remoteData.discardPile.length;
-                if (remoteData.lastDiscard && pileGrew && remoteData.lastDiscard.source === 'drawnCard' && localPlayer.drawnCard) {
-                    this.gameState.discardCard(localPlayer, localPlayer.drawnCard);
-                    localPlayer.drawnCard = null;
+                if (remoteData.lastDiscard && localPlayer.discardPile.length < remoteData.discardPile.length) {
+                    const ld = remoteData.lastDiscard;
+                    let cardToDiscard;
+                    if (ld.source === 'drawnCard') {
+                        if (!localPlayer.drawnCard) throw new Error('[NetworkSession] Cannot discard drawnCard but player has no drawnCard');
+                        cardToDiscard = localPlayer.drawnCard;
+                    } else if (ld.source === 'hand') {
+                        if (ld.handIndex < 0 || ld.handIndex >= localPlayer.hand.length) throw new Error('[NetworkSession] Cannot discard hand card at invalid index');
+                        cardToDiscard = localPlayer.hand[ld.handIndex];
+                    }
+                    if (!cardToDiscard) throw new Error('[NetworkSession] No card found to discard');
+                    this.gameState.discardCard(localPlayer, cardToDiscard);
                     remoteData.lastDiscard = null;
                 } else {
                     while (localPlayer.discardPile.length < remoteData.discardPile.length) {
-                        const nc = new Card('', '', null, 0.75);
-                        const seat = seatMap[i];
-                        nc.x = seat.x; nc.y = seat.y;
-                        localPlayer.discardPile.push(nc);
+                        throw new Error('[NetworkSession] Discard pile grew but no lastDiscard data available');
                     }
                 }
                 for (let j = 0; j < remoteData.discardPile.length; j++) {
