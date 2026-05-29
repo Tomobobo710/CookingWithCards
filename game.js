@@ -1448,13 +1448,8 @@ class Game {
                 const topCard = p.discardPile[p.discardPile.length - 1];
                 topCard.moveTo(rect.x, rect.y);
                 topCard.scaleTo(0.75);
+                topCard.glowing = canClick;
                 topCard.draw(this.gameCtx);
-
-                if (canClick) {
-                    this.gameCtx.strokeStyle = HOTPOT.COLORS.HIGHLIGHT;
-                    this.gameCtx.lineWidth = 4;
-                    this.gameCtx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-                }
             } else {
                 this.gameCtx.fillStyle = 'rgba(80,40,20,0.6)';
                 this.gameCtx.fillRect(rect.x, rect.y, rect.w, rect.h);
@@ -1542,25 +1537,18 @@ class Game {
                     break;
                 }
             }
-            if (!playerLabel) playerLabel = player.name + "'s Hand";
+            if (!playerLabel) {
+                playerLabel = player.name === 'You' ? 'Your Hand' : player.name + "'s Hand";
+            }
         } else {
-            playerLabel = player.name + "'s Hand";
+            playerLabel = player.name === 'You' ? 'Your Hand' : player.name + "'s Hand";
         }
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 14px Arial';
         this.gameCtx.textAlign = 'center';
         this.gameCtx.fillText(playerLabel, HOTPOT.WIDTH / 2, HOTPOT.HEIGHT - 10);
 
-        if (this.bestSets.length > 0) {
-            this.gameCtx.fillStyle = '#90ee90';
-            this.gameCtx.font = '12px Arial';
-            const tripleCount = this.bestSets.filter(s => s[0].ingredient === s[1].ingredient).length;
-            const catCount = this.bestSets.filter(s => s[0].ingredient !== s[1].ingredient).length;
-            this.gameCtx.textAlign = 'right';
-            this.gameCtx.fillText(`Found: ${tripleCount} triple(s), ${catCount} category set(s)`, HOTPOT.WIDTH - 10, HOTPOT.UI.HAND_Y - 20);
-        }
-
-        if (player.sets.length > 0) {
+         if (player.sets.length > 0) {
             this.gameCtx.fillStyle = '#90ee90';
             this.gameCtx.font = '12px Arial';
             this.gameCtx.textAlign = 'left';

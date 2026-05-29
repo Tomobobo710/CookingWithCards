@@ -36,7 +36,8 @@ const HOTPOT = {
         WIN_BUTTON: '#2e7d32',
         WIN_BUTTON_HOVER: '#388e3c',
         DEBUG_BG: 'rgba(0,0,0,0.7)',
-        DEBUG_TEXT: '#00ff00'
+        DEBUG_TEXT: '#00ff00',
+        GLOW: '#ffd700'
     },
 
     CARD_SCALE: 0.75,

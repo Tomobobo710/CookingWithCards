@@ -39,9 +39,11 @@ class Card {
         this.targetRotation = 0;
         this.targetScale = scale;
 
-        this.faceUp = true;
+       this.faceUp = true;
         this.animating = false;
         this.highlighted = null;
+        this.glowing = false;
+        this.glowPhase = 0;
 
         // Flip animation (self-contained, no game.animation dependency)
         this.flipping = false;
@@ -142,6 +144,10 @@ class Card {
             stillAnimating = true;
         }
 
+     if (this.glowing) {
+            this.glowPhase += 0.04;
+        }
+
         this.animating = stillAnimating;
         return stillAnimating;
     }
@@ -181,7 +187,7 @@ class Card {
         }
         ctx.restore();
 
-        if (this.highlighted) {
+       if (this.highlighted) {
             ctx.save();
             if (wasMirrored) ctx.scale(-1, 1);
             ctx.strokeStyle = this.highlighted === 'triple' ? '#00ff00' : '#00ccff';
@@ -191,6 +197,21 @@ class Card {
             ctx.stroke();
             ctx.fillStyle = this.highlighted === 'triple' ? 'rgba(0,255,0,0.12)' : 'rgba(0,204,255,0.12)';
             ctx.fill();
+            ctx.restore();
+        }
+
+        if (this.glowing) {
+            ctx.save();
+            if (wasMirrored) ctx.scale(-1, 1);
+            const pulse = 0.5 + 0.5 * Math.sin(this.glowPhase);
+            ctx.shadowColor = HOTPOT.COLORS.GLOW;
+            ctx.shadowBlur = 10 + pulse * 12;
+            ctx.strokeStyle = HOTPOT.COLORS.GLOW;
+            ctx.globalAlpha = 0.5 + pulse * 0.5;
+            ctx.lineWidth = 3 * this.scale;
+            ctx.beginPath();
+            this.drawRoundedRect(ctx, -this.width / 2, -this.height / 2, this.width, this.height);
+            ctx.stroke();
             ctx.restore();
         }
 
