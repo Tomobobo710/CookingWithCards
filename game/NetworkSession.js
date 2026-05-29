@@ -978,34 +978,72 @@ class HotpotNetworkSession {
         const users = this.networkManager.getConnectedUsers();
         if (!users || users.length === 0) return;
 
-        // Reset all players
+        // Build a set of connected usernames for quick lookup
+        const connectedUsernames = new Set();
+        for (const user of users) {
+            connectedUsernames.add(user.username);
+        }
+
+        // First pass: mark which connected users are already in a slot (preserve their slot)
+        const occupiedSlots = new Set();
         for (let i = 0; i < this.game.state.players.length; i++) {
+            const p = this.game.state.players[i];
+            if (p.isHuman && connectedUsernames.has(p.username)) {
+                occupiedSlots.add(i);
+            }
+        }
+
+        // Second pass: assign connected users to remaining slots
+        let userIndex = 0;
+        for (let i = 0; i < this.game.state.players.length; i++) {
+            const p = this.game.state.players[i];
+
+            if (occupiedSlots.has(i)) {
+                // Already occupied by a connected user — keep them
+                p.playerNumber = i;
+                continue;
+            }
+
+            // Assign next available connected user
+            if (userIndex < users.length) {
+                const user = users[userIndex];
+                p.playerNumber = i;
+                p.username = user.username;
+                p.name = user.username;
+                p.isHuman = true;
+                userIndex++;
+            } else {
+                // No more users — fill with bot, clean everything
+                p.playerNumber = i;
+                p.username = '';
+                p.name = 'Bot ' + (i + 1);
+                p.isHuman = false;
+                p.tablePosition = HOTPOT.POSITIONS[i] || 'S';
+            }
+        }
+
+        // Third pass: clean up slots beyond connected users — full bot reset
+        for (let i = userIndex; i < this.game.state.players.length; i++) {
             const p = this.game.state.players[i];
             p.playerNumber = i;
             p.username = '';
-            p.name = '';
-            p.isHuman = false;
-        }
-
-        // Map each connected user to a player slot
-        let slot = 0;
-        for (const user of users) {
-            if (slot >= this.game.state.players.length) break;
-            const p = this.game.state.players[slot];
-            p.playerNumber = slot;
-            p.username = user.username;
-            p.name = user.username;
-            p.isHuman = true;  // real humans, not bots
-            slot++;
-        }
-
-        // Fill remaining slots with bots
-        for (let i = slot; i < this.game.state.players.length; i++) {
-            const p = this.game.state.players[i];
-            p.playerNumber = i;
             p.name = 'Bot ' + (i + 1);
-            p.username = 'Bot ' + (i + 1);
             p.isHuman = false;
+            p.tablePosition = HOTPOT.POSITIONS[i] || 'S';
+        }
+
+        // Fourth pass: ensure all bots have valid tablePosition
+        for (let i = 0; i < this.game.state.players.length; i++) {
+            const p = this.game.state.players[i];
+            if (!p.tablePosition) {
+                p.tablePosition = HOTPOT.POSITIONS[i] || 'S';
+            }
+        }
+
+        // Rebuild remotePlayers array from player slots
+        this.remotePlayers = [];
+        for (let i = 1; i < this.game.state.players.length; i++) {
+            this.remotePlayers.push(this.game.state.players[i]);
         }
     }
 
@@ -1013,14 +1051,19 @@ class HotpotNetworkSession {
         const currentState = this.state;
 
         if (currentState === "WAITING" || currentState === "CANCELLED") {
-            // Just replace with bot
             this.replacePlayerWithBot(user);
             return;
         }
 
         if (currentState === "PLAYING") {
-            // Replace with bot, game continues
+            // Replace with bot
             this.replacePlayerWithBot(user);
+
+            // If the disconnected player was the current player, skip their turn
+            const cp = this.gameState.getCurrentPlayer();
+            if (cp && cp.username === user.username) {
+                this.skipTurn();
+            }
             return;
         }
 
@@ -1070,26 +1113,11 @@ class HotpotNetworkSession {
             }
         }
 
-        if (leftSlot === -1) {
-            // User not found in player slots, try to find in remotePlayers
-            for (let i = 0; i < this.remotePlayers.length; i++) {
-                if (this.remotePlayers[i].username === user.username ||
-                    this.remotePlayers[i].name === user.username) {
-                    leftSlot = i + 1;
-                    break;
-                }
-            }
-        }
-
         if (leftSlot === -1) return;
 
         const leavingPlayer = this.game.state.players[leftSlot];
 
-        // Determine the tablePosition this slot should keep
-        const tablePosition = leavingPlayer ? leavingPlayer.tablePosition : HOTPOT.POSITIONS[leftSlot] || 'S';
-        const playerNumber = leavingPlayer ? leavingPlayer.playerNumber : leftSlot;
-
-        // Replace with bot that takes over the human's hand and state
+        // Replace with a bot that inherits the human's game state
         const botPlayer = new (this.game.state.players[0].constructor)(
             leftSlot,
             'Bot ' + (leftSlot + 1),
@@ -1098,12 +1126,11 @@ class HotpotNetworkSession {
         );
         botPlayer.isRemote = false;
         botPlayer.isLocal = false;
-        botPlayer.playerNumber = playerNumber;
-        botPlayer.tablePosition = tablePosition;
+        botPlayer.playerNumber = leftSlot;
+        botPlayer.tablePosition = leavingPlayer ? leavingPlayer.tablePosition : HOTPOT.POSITIONS[leftSlot];
         botPlayer.botStarted = false;
         botPlayer.turnTimer = 0;
 
-        // Copy the human's game state to the bot — hand, drawn card, discard pile, sets, score, etc.
         if (leavingPlayer) {
             botPlayer.hand = leavingPlayer.hand;
             botPlayer.drawnCard = leavingPlayer.drawnCard;
@@ -1117,13 +1144,7 @@ class HotpotNetworkSession {
 
         this.game.state.players[leftSlot] = botPlayer;
 
-        // Also update remotePlayers if this was a remote player
-        const remoteIdx = leftSlot - 1;
-        if (remoteIdx >= 0 && remoteIdx < this.remotePlayers.length) {
-            this.remotePlayers[remoteIdx] = botPlayer;
-        }
-
-        // Re-sync player slots to the remote client via sync
+        // Let assignPlayerSlots() handle final slot cleanup, position fixes, and remotePlayers rebuild
         if (this.isHost) {
             this.assignPlayerSlots();
         }
