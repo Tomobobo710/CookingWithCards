@@ -348,7 +348,7 @@ class Game {
             return;
         }
 
-        if (this.gameState === 'playing') {
+        if (this.gameState === 'playing' || (this.gameState === 'onlineMultiplayer' && this.networkSession && this.networkSession.isHost)) {
             const player = this.state.getCurrentPlayer();
             if (player.isHuman) {
                 if (this.turnPhase === 'draw') {
@@ -361,7 +361,7 @@ class Game {
 
         if (this.gameState === 'onlineMultiplayer' && this.networkSession && !this.networkSession.isHost) {
             const localPlayer = this.networkSession.game.state.players[this.networkSession.localPlayerIndex];
-            const isMyTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+            const isMyTurn = this.networkSession.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
             if (localPlayer && localPlayer.isHuman && isMyTurn) {
                 if (this.turnPhase === 'draw') {
                     this.handleHumanDrawForPlayer(localPlayer);
@@ -1291,7 +1291,7 @@ class Game {
             this.drawTurnInfo(currentPlayer);
             let isLocalTurn = false;
             if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
-                isLocalTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+                isLocalTurn = this.networkSession.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
             } else {
                 isLocalTurn = currentPlayer && currentPlayer.isHuman;
             }
@@ -1330,7 +1330,7 @@ class Game {
         const player = this.state.getCurrentPlayer();
         let isMyTurn = false;
         if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
-            isMyTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+            isMyTurn = this.networkSession.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
         } else {
             isMyTurn = player && player.isHuman;
         }
@@ -1357,7 +1357,7 @@ class Game {
         const player = this.state.getCurrentPlayer();
         let isMyTurn = false;
         if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
-            isMyTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+            isMyTurn = this.networkSession.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
         } else {
             isMyTurn = player && player.isHuman;
         }
@@ -1586,7 +1586,7 @@ class Game {
 
         let isMyTurn = false;
         if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
-            isMyTurn = this.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
+            isMyTurn = this.networkSession.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
         } else {
             isMyTurn = currentPlayer.isHuman;
         }
