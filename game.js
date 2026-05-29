@@ -961,7 +961,6 @@ class Game {
     }
 
     getHandCardRects(player) {
-        if (!player || !player.hand) return [];
         const cards = player.hand;
         if (cards.length === 0) return [];
 
@@ -1543,7 +1542,6 @@ class Game {
     }
 
     drawLocalPlayerHand(player) {
-        if (!player || !player.hand) return;
         const handRects = this.getHandCardRects(player);
 
         for (let i = 0; i < player.hand.length; i++) {
