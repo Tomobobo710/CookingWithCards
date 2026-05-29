@@ -49,6 +49,12 @@ class HotpotActionNetInputManager {
     }
 
     onJoinedRoom(roomName) {
+        // If we already have a session, this is a subsequent player joining — do nothing.
+        // The session was created when the first connection happened.
+        if (this.game.networkSession) {
+            return;
+        }
+
         if (!this.networkManager) {
             this.networkManager = this.gui ? this.gui.getNetManager() : null;
         }

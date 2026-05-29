@@ -342,13 +342,24 @@ class Game {
             return;
         }
 
-        if (this.gameState === 'playing' || this.gameState === 'onlineMultiplayer') {
+        if (this.gameState === 'playing') {
             const player = this.state.getCurrentPlayer();
             if (player.isHuman) {
                 if (this.turnPhase === 'draw') {
                     this.handleHumanDraw();
                 } else if (this.turnPhase === 'discard') {
                     this.handleHumanDiscard(player);
+                }
+            }
+        }
+
+        if (this.gameState === 'onlineMultiplayer' && this.networkSession && !this.networkSession.isHost) {
+            const localPlayer = this.networkSession.game.state.players[this.networkSession.localPlayerIndex];
+            if (localPlayer && localPlayer.isHuman) {
+                if (this.turnPhase === 'draw') {
+                    this.handleHumanDrawForPlayer(localPlayer);
+                } else if (this.turnPhase === 'discard') {
+                    this.handleHumanDiscardForPlayer(localPlayer);
                 }
             }
         }
@@ -440,6 +451,65 @@ class Game {
                 this.state.discardCard(player, card);
                 this.audio.play('discard', { volume: 0.3 });
                 this.endTurn();
+            }
+        }
+    }
+
+    handleHumanDrawForPlayer(player) {
+        if (!this.input.isLeftMouseButtonJustPressed()) return;
+        const pointer = this.input.getPointerPosition();
+
+        const remoteGame = this.networkSession.syncSystem ? this.networkSession.syncSystem.getRemote("game") : null;
+        const deckAvailable = remoteGame ? remoteGame.deckCount > 0 : this.state.deck.length > 0;
+
+        const deckRect = this.getDeckRect();
+        if (this.pointInRect(pointer, deckRect) && deckAvailable) {
+            this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "drawDeck");
+            return;
+        }
+
+        for (let i = 1; i < this.state.players.length; i++) {
+            const other = this.state.players[i];
+            if (other.discardPile.length === 0) continue;
+            const rect = this.getDiscardRect(i);
+            if (this.pointInRect(pointer, rect)) {
+                this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "drawDiscard", { sourcePlayerIndex: i });
+                return;
+            }
+        }
+    }
+
+    handleHumanDiscardForPlayer(player) {
+        if (!this.input.isLeftMouseButtonJustPressed()) return;
+        const pointer = this.input.getPointerPosition();
+
+        if (this.state.canWin(player)) {
+            this.eatButton.hovered = this.input.isElementHovered('eat_button');
+            if (this.input.isElementJustPressed('eat_button')) {
+                this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "win");
+                return;
+            }
+        }
+
+        const handCards = this.getHandCardRects(0);
+        for (let i = 0; i < player.hand.length; i++) {
+            if (this.pointInRect(pointer, handCards[i])) {
+                const card = player.hand[i];
+                this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "discard", {
+                    category: card.category,
+                    ingredient: card.ingredient
+                });
+                return;
+            }
+        }
+
+        if (player.drawnCard) {
+            const drawnRect = this.getDrawnCardRect();
+            if (this.pointInRect(pointer, drawnRect)) {
+                this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "discard", {
+                    category: player.drawnCard.category,
+                    ingredient: player.drawnCard.ingredient
+                });
             }
         }
     }
@@ -1033,13 +1103,34 @@ class Game {
         this.drawDiscardPiles();
         this.drawSettingsButton();
 
-        for (let i = 0; i < this.state.players.length; i++) {
-            const p = this.state.players[i];
-            if (p.isHuman) {
-                this.drawHumanHand(p);
-            } else {
-                this.drawBotHand(p, i);
+        // Find local player index (the one controlling this client)
+        let localPlayerIndex = 0;
+        if (this.networkSession) {
+            localPlayerIndex = this.networkSession.isHost ? 0 : (this.networkSession.localPlayerIndex >= 0 ? this.networkSession.localPlayerIndex : 0);
+        } else {
+            // Single player: player 0 is human
+            for (let i = 0; i < this.state.players.length; i++) {
+                if (this.state.players[i].isHuman) { localPlayerIndex = i; break; }
             }
+        }
+
+        // Render local player at bottom, remote players at other 3 positions
+        const localPlayer = this.state.players[localPlayerIndex];
+        this.drawHumanHand(localPlayer, localPlayerIndex);
+
+        // Remote players: position them around the table
+        // Fixed visual slots: left(E)=1, top(N)=2, right(W)=3
+        // Players fill slots in turn order, starting from the slot after local player (clockwise)
+        const visualSlots = [1, 2, 3]; // left, top, right
+        let slotIdx = 0;
+        // Start filling from the player whose index is next after localPlayerIndex (clockwise)
+        for (let offset = 1; offset < this.state.players.length; offset++) {
+            const remoteIdx = (localPlayerIndex + offset) % this.state.players.length;
+            if (remoteIdx >= this.state.players.length) continue;
+            const p = this.state.players[remoteIdx];
+            const visualPos = visualSlots[slotIdx % visualSlots.length];
+            this.drawBotHand(p, visualPos);
+            slotIdx++;
         }
 
         if (this.gameState === 'gameOver') {
@@ -1194,10 +1285,17 @@ class Game {
             this.gameCtx.fillText('DRAWN', drawnRect.x + drawnRect.w / 2, drawnRect.y - 8);
         }
 
+        let playerLabel = '';
+        if (this.networkSession) {
+            const idx = this.networkSession.isHost ? 0 : this.networkSession.localPlayerIndex;
+            playerLabel = player.name + "'s Hand (Player" + idx + ")";
+        } else {
+            playerLabel = player.name + "'s Hand";
+        }
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 14px Arial';
         this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText('Your Hand', HOTPOT.WIDTH / 2, HOTPOT.HEIGHT - 10);
+        this.gameCtx.fillText(playerLabel, HOTPOT.WIDTH / 2, HOTPOT.HEIGHT - 10);
 
         if (this.bestSets.length > 0) {
             this.gameCtx.fillStyle = '#90ee90';

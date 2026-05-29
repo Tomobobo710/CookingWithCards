@@ -42,9 +42,6 @@ class HotpotNetworkSession {
 
       // Detect P2P mode for sync activation
         if (typeof this.networkManager.getDataChannel === 'function') {
-            // Set up data channel message handler for sync updates
-            // The data channel may not be open yet (host creates room before guests join)
-            // So we also listen for joinedRoom to catch it when the channel opens
             const setupChannelHandler = () => {
                 const dc = this.networkManager.getDataChannel();
                 if (dc && dc.readyState === 'open' && !dc._hotpotSyncHandlerSet) {
@@ -110,7 +107,9 @@ class HotpotNetworkSession {
 
        // Create local player (player 0 = human)
         this.localPlayer = this.game.state.players[0];
-        this.localPlayer.username = this.game.gui.getUsername();
+        const myUsername = this.game.gui.getUsername();
+        this.localPlayer.username = myUsername;
+        this.localPlayer.name = myUsername;
 
         // Create remote player placeholders (up to 3 remote players)
         this.remotePlayers = [];
@@ -137,9 +136,6 @@ class HotpotNetworkSession {
         this.game.currentSpeed = 2;
         this.game.applySpeedToAllCards();
 
-        // Reset game state for online play
-        this.resetOnlineGame();
-
         // Joiner is ready immediately; host becomes ready when they click wait
         if (!this.isHost) {
             this.ready = true;
@@ -148,7 +144,7 @@ class HotpotNetworkSession {
         // Register sync sources
         this.registerSyncSources();
 
-        // Listen for remote state updates
+       // Listen for remote state updates
         this.syncSystem.on("remoteUpdated", () => {
             this.checkStartConditions();
             this.checkRematchConditions();
@@ -230,52 +226,53 @@ class HotpotNetworkSession {
         }
     }
 
-   registerSyncSources() {
-        // Match state: session state, readiness, rematch intent, host waiting, connected usernames
+  registerSyncSources() {
+        // Match state: session state, readiness, rematch intent, host waiting, player slot assignments
         this.syncSystem.register("match", {
             getFields: () => {
-                const users = this.networkManager.getConnectedUsers();
-                const usernames = users.map(u => u.username);
+                const playerSlots = [];
+                for (let i = 1; i < this.game.state.players.length; i++) {
+                    const p = this.game.state.players[i];
+                    if (p.isRemote && p.username) {
+                        playerSlots.push({ username: p.username, playerIndex: i });
+                    }
+                }
+                if (this.isHost && playerSlots.length > 0) {
+                    console.log("[NS] Host broadcasting playerSlots: " + JSON.stringify(playerSlots));
+                }
                 return {
                     state: this.state,
                     ready: this.ready,
                     wantsRematch: this.rematchState.localRequested,
                     hostWaiting: this.hostWaiting,
-                    usernames: usernames
+                    playerSlots: playerSlots
                 };
             }
         });
 
-        // Game state: phase, current player, round, deck count
+        // Game state: phase, current player, round, deck count, countdown
         this.syncSystem.register("game", {
             getFields: () => ({
                 gamePhase: this.gameState.gamePhase,
                 currentPlayerIndex: this.gameState.currentPlayerIndex,
                 roundNumber: this.gameState.roundNumber,
                 deckCount: this.gameState.deck.length,
-                turnTimer: this.game.turnTimer
+                turnTimer: this.game.turnTimer,
+                countdownPhase: this.state === "COUNTDOWN" ? "countdown" : (this.state === "PLAYING" && this.countdown?.phase === "go" ? "go" : "none"),
+                countdownRemaining: this.countdownTimer
             })
         });
 
-        // Per-player sync sources
+        // Per-player sync sources — every player's full state
         for (let i = 0; i < this.game.state.players.length; i++) {
             const player = this.game.state.players[i];
             const sourceId = "player_" + i;
 
             this.syncSystem.register(sourceId, {
                 getFields: () => ({
-                    hand: player.hand.map(c => ({
-                        category: c.category,
-                        ingredient: c.ingredient
-                    })),
-                    drawnCard: player.drawnCard ? {
-                        category: player.drawnCard.category,
-                        ingredient: player.drawnCard.ingredient
-                    } : null,
-                    discardPile: player.discardPile.map(c => ({
-                        category: c.category,
-                        ingredient: c.ingredient
-                    })),
+                    hand: player.hand.map(c => ({ category: c.category, ingredient: c.ingredient })),
+                    drawnCard: player.drawnCard ? { category: player.drawnCard.category, ingredient: player.drawnCard.ingredient } : null,
+                    discardPile: player.discardPile.map(c => ({ category: c.category, ingredient: c.ingredient })),
                     sets: player.sets.length,
                     won: player.won,
                     score: player.score,
@@ -418,7 +415,6 @@ class HotpotNetworkSession {
         this.state = "COUNTDOWN";
         this.countdownTimer = 3;
         this.countdownFinished = false;
-        console.log("[NetworkSession] Host starting countdown, state=" + this.state);
         this.game.gameState = "onlineMultiplayer";
 
         // Reset game state for both players before countdown
@@ -438,6 +434,22 @@ class HotpotNetworkSession {
         const cd = this.game && this.game.countdown ? this.game.countdown : null;
         if (!cd) return;
         if (this.countdownFinished) return;
+
+        // Guest: sync countdown from host's broadcast every frame
+        if (!this.isHost && this.state === "COUNTDOWN") {
+            const remoteGame = this.syncSystem ? this.syncSystem.getRemote("game") : null;
+            if (remoteGame && typeof remoteGame.countdownRemaining === "number") {
+                this.countdownTimer = remoteGame.countdownRemaining;
+                cd.countdownNumber = Math.max(1, Math.ceil(this.countdownTimer));
+            }
+            if (cd.phase === "countdown" && this.countdownTimer <= 0) {
+                this.startGame();
+                cd.phase = "go";
+                cd.timer = 0;
+                cd.countdownNumber = null;
+            }
+            return;
+        }
 
         if (cd.active) {
             const inCountdownState = this.state === "COUNTDOWN";
@@ -670,119 +682,109 @@ class HotpotNetworkSession {
         }
     }
 
-  updateRemotePlayerStates() {
-        // Sync usernames from match source during WAITING, from player sources during PLAYING
-        if (this.state === "WAITING") {
-            if (this.isHost) {
-                // Host: use connected users list directly
-                const users = this.networkManager.getConnectedUsers();
-                let remoteIdx = 0;
-                for (let i = 1; i < this.game.state.players.length; i++) {
-                    const p = this.game.state.players[i];
-                    if (remoteIdx < users.length) {
-                        const username = users[remoteIdx].username;
-                        if (username !== this.localPlayer.username) {
-                            p.username = username;
-                            p.name = username;
-                            p.isRemote = true;
-                        }
-                        remoteIdx++;
-                    }
-                }
-            } else {
-                // Guest: read usernames from host's match source
-                const remoteMatch = this.syncSystem ? this.syncSystem.getRemote("match") : null;
-                if (remoteMatch && remoteMatch.usernames) {
-                    const myUsername = this.game.gui.getUsername();
-                    let remoteIdx = 0;
-                    for (let i = 1; i < this.game.state.players.length; i++) {
-                        const p = this.game.state.players[i];
-                        if (remoteIdx < remoteMatch.usernames.length) {
-                            const username = remoteMatch.usernames[remoteIdx];
-                            if (username !== myUsername) {
-                                p.username = username;
-                                p.name = username;
-                                p.isRemote = true;
-                            }
-                            remoteIdx++;
-                        }
-                    }
+   updateRemotePlayerStates() {
+        if (this.isHost) {
+            // Host: assign player slots to connected users (skip self at index 0)
+            const users = this.networkManager.getConnectedUsers();
+            let userIdx = 0;
+            for (let i = 1; i < this.game.state.players.length; i++) {
+                const p = this.game.state.players[i];
+                if (userIdx < users.length && !users[userIdx].isHost) {
+                    p.username = users[userIdx].username;
+                    p.name = users[userIdx].username;
+                    p.isRemote = true;
+                    userIdx++;
+                } else {
+                    p.isRemote = false;
+                    p.name = 'Bot ' + i;
                 }
             }
             return;
         }
 
-        if (this.state === "COUNTDOWN") {
-            // Same as WAITING — sync usernames during countdown
-            if (this.isHost) {
-                const users = this.networkManager.getConnectedUsers();
-                let remoteIdx = 0;
-                for (let i = 1; i < this.game.state.players.length; i++) {
-                    const p = this.game.state.players[i];
-                    if (remoteIdx < users.length) {
-                        const username = users[remoteIdx].username;
-                        if (username !== this.localPlayer.username) {
-                            p.username = username;
-                            p.name = username;
-                            p.isRemote = true;
-                        }
-                        remoteIdx++;
-                    }
-                }
-            } else {
-                const remoteMatch = this.syncSystem ? this.syncSystem.getRemote("match") : null;
-                if (remoteMatch && remoteMatch.usernames) {
-                    const myUsername = this.game.gui.getUsername();
-                    let remoteIdx = 0;
-                    for (let i = 1; i < this.game.state.players.length; i++) {
-                        const p = this.game.state.players[i];
-                        if (remoteIdx < remoteMatch.usernames.length) {
-                            const username = remoteMatch.usernames[remoteIdx];
-                            if (username !== myUsername) {
-                                p.username = username;
-                                p.name = username;
-                                p.isRemote = true;
-                            }
-                            remoteIdx++;
-                        }
-                    }
+        // Guest: find our player slot from host's assignment
+        const remoteMatch = this.syncSystem ? this.syncSystem.getRemote("match") : null;
+        let myPlayerIndex = 0;
+        const myUsername = this.game.gui.getUsername();
+        console.log("[NS] Guest sync: myUsername=" + myUsername + " remoteMatch=" + !!remoteMatch + " playerSlots=" + JSON.stringify(remoteMatch ? remoteMatch.playerSlots : null));
+        if (remoteMatch && remoteMatch.playerSlots) {
+            for (const slot of remoteMatch.playerSlots) {
+                console.log("[NS] Guest checking slot: username=" + slot.username + " playerIndex=" + slot.playerIndex);
+                if (slot.username === myUsername) {
+                    myPlayerIndex = slot.playerIndex;
+                    console.log("[NS] Guest found own slot: playerIndex=" + myPlayerIndex);
+                    break;
                 }
             }
-            return;
         }
 
-        if (this.state !== "PLAYING") return;
+        // Sync game state from host
+        const remoteGame = this.syncSystem ? this.syncSystem.getRemote("game") : null;
+        if (remoteGame) {
+            this.gameState.currentPlayerIndex = remoteGame.currentPlayerIndex;
+            this.gameState.gamePhase = remoteGame.gamePhase;
+        }
 
-        for (let i = 1; i < this.game.state.players.length; i++) {
+        // Sync every player_N source into the corresponding local player slot
+        for (let i = 0; i < this.game.state.players.length; i++) {
             const sourceId = "player_" + i;
             const remoteData = this.syncSystem ? this.syncSystem.getRemote(sourceId) : null;
             const localPlayer = this.game.state.players[i];
 
             if (!remoteData) continue;
 
-            // Update score
-            if (typeof remoteData.score === "number") {
-                localPlayer.score = remoteData.score;
+            // Mark if this is us or a remote human
+            if (i === myPlayerIndex) {
+                localPlayer.isRemote = false;
+                localPlayer.isHuman = true;
+            } else if (remoteData.isRemote) {
+                localPlayer.isRemote = true;
+            } else {
+                localPlayer.isRemote = false;
             }
 
-            // Update turn count
-            if (typeof remoteData.turnCount === "number") {
-                localPlayer.turnCount = remoteData.turnCount;
+            // Sync username
+            if (remoteData.username) {
+                localPlayer.username = remoteData.username;
+                localPlayer.name = remoteData.username;
             }
 
-            // Update sets count
+            // Sync hand cards
+            if (Array.isArray(remoteData.hand)) {
+                localPlayer.hand.length = 0;
+                for (const hc of remoteData.hand) {
+                    const card = new Card(hc.category, hc.ingredient, 0.375);
+                    localPlayer.hand.push(card);
+                }
+            }
+
+            // Sync drawn card
+            if (remoteData.drawnCard) {
+                localPlayer.drawnCard = new Card(remoteData.drawnCard.category, remoteData.drawnCard.ingredient, 0.375);
+            } else {
+                localPlayer.drawnCard = null;
+            }
+
+            // Sync discard pile
+            if (Array.isArray(remoteData.discardPile)) {
+                localPlayer.discardPile.length = 0;
+                for (const dc of remoteData.discardPile) {
+                    const card = new Card(dc.category, dc.ingredient, 0.375);
+                    localPlayer.discardPile.push(card);
+                }
+            }
+
+            // Sync stats
+            if (typeof remoteData.score === "number") localPlayer.score = remoteData.score;
+            if (typeof remoteData.turnCount === "number") localPlayer.turnCount = remoteData.turnCount;
+            if (typeof remoteData.turnTimer === "number") localPlayer.turnTimer = remoteData.turnTimer;
             if (typeof remoteData.sets === "number") {
                 localPlayer.sets = [];
                 for (let s = 0; s < remoteData.sets; s++) {
                     localPlayer.sets.push([]);
                 }
             }
-
-            // Update username for remote players
-            if (remoteData.isRemote && remoteData.username && remoteData.username !== localPlayer.username) {
-                localPlayer.username = remoteData.username;
-                localPlayer.name = remoteData.username;
-            }
+            if (typeof remoteData.won === "boolean") localPlayer.won = remoteData.won;
         }
     }
 
@@ -939,30 +941,43 @@ class HotpotNetworkSession {
         const isHost = this.networkManager.isCurrentUserHost();
 
         if (isHost) {
-            // Host manages its own state
             if (this.state === "WAITING") {
                 this.game.gameState = "waitingMenu";
             }
             return;
         }
 
-        // Guest: check remote state from host
+       // Guest: check remote state from host
         const remoteMatch = this.syncSystem ? this.syncSystem.getRemote("match") : null;
         const remoteState = remoteMatch ? remoteMatch.state : "WAITING";
-        console.log("[NetworkSession] Guest checkHostWaitingState: remoteState=" + remoteState + " localState=" + this.state);
+
+        // Only react to state changes, not every frame
+        if (remoteState === this._lastGuestRemoteState) return;
+        this._lastGuestRemoteState = remoteState;
 
         if (remoteState === "WAITING") {
             this.game.gameState = "waitingForHostMenu";
         } else if (remoteState === "COUNTDOWN") {
             this.game.gameState = "onlineMultiplayer";
+            // Start countdown synced from host
+            const remoteGame = this.syncSystem ? this.syncSystem.getRemote("game") : null;
             if (this.game.countdown) {
                 this.game.countdown.active = true;
                 this.game.countdown.phase = "countdown";
-                this.game.countdown.countdownNumber = 3;
+                if (remoteGame && typeof remoteGame.countdownRemaining === "number") {
+                    this.game.countdown.countdownNumber = Math.max(1, Math.ceil(remoteGame.countdownRemaining));
+                } else {
+                    this.game.countdown.countdownNumber = 3;
+                }
                 this.game.countdown.timer = 0;
                 this.game.countdown.waitingForOpponent = false;
             }
         } else if (remoteState === "PLAYING") {
+            // Only transition if we haven't already
+            if (this.game.countdown && this.game.countdown.phase !== "waiting") {
+                this.game.countdown.active = false;
+                this.game.countdown.phase = "waiting";
+            }
             this.game.gameState = "onlineMultiplayer";
         } else if (remoteState === "GAME_OVER") {
             this.game.gameState = "gameOver";
