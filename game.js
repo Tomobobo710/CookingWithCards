@@ -127,14 +127,15 @@ class GameState {
         this.shuffleDeck();
     }
 
-    shuffleDeck() {
-        for (let i = this.deck.length - 1; i > 0; i--) {
+    shuffleDeck(arr) {
+        const deck = arr || this.deck;
+        for (let i = deck.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+            [deck[i], deck[j]] = [deck[j], deck[i]];
         }
     }
 
-    dealInitialHands() {
+    dealInitialHands(deckRect) {
         for (const player of this.players) {
             player.hand = [];
             player.drawnCard = null;
@@ -145,6 +146,10 @@ class GameState {
             for (let i = 0; i < HOTPOT.GAME.INITIAL_HAND; i++) {
                 if (this.deck.length > 0) {
                     const card = this.deck.pop();
+                    card.x = deckRect.x;
+                    card.y = deckRect.y;
+                    card.targetX = deckRect.x;
+                    card.targetY = deckRect.y;
                     card.moveTo(HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2);
                     player.hand.push(card);
                 }
@@ -161,11 +166,25 @@ class GameState {
     }
 
     drawFromDeck(player) {
+        if (this.deck.length === 0) {
+            this.refillDeckFromDiscards();
+        }
         if (this.deck.length === 0) return null;
         const card = this.deck.pop();
+        card.faceUp = false;
         player.drawnCard = card;
         player.hasDrawn = true;
         return card;
+    }
+
+    refillDeckFromDiscards() {
+        const reshuffle = [];
+        for (const p of this.players) {
+            if (p.discardPile.length <= 1) continue;
+            reshuffle.push(...p.discardPile.splice(0, p.discardPile.length - 1));
+        }
+        this.shuffleDeck(reshuffle);
+        this.deck = reshuffle;
     }
 
     drawFromDiscard(player, sourcePlayer) {
@@ -360,7 +379,8 @@ class Game {
         this.state.reset();
         this.setupPlayers();
         this.state.createDeck();
-        this.state.dealInitialHands();
+        const deckRect = this.getDeckRect();
+        this.state.dealInitialHands(deckRect);
         this.state.gamePhase = 'playing';
         this.gameState = 'playing';
         this.turnPhase = 'draw';
@@ -372,9 +392,13 @@ class Game {
         this.bestSets = [];
         this._botRevealed = false;
 
-        // Apply speed to all deck cards
+       // Apply speed to all deck cards and position them on the deck
         for (const card of this.state.deck) {
             this.applySpeedToCard(card);
+            card.x = deckRect.x;
+            card.y = deckRect.y;
+            card.targetX = deckRect.x;
+            card.targetY = deckRect.y;
         }
 
         // Deal animation: animate human hand cards from deck to hand
@@ -706,7 +730,8 @@ class Game {
         } else if (this.state.deck.length > 0) {
             this.state.drawFromDeck(player);
             this.applySpeedToCard(player.drawnCard);
-            player.drawnCard.moveTo(HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2);
+            const deckRect = this.getDeckRect();
+            player.drawnCard.moveTo(deckRect.x, deckRect.y);
         } else if (bestStealTarget) {
             this.state.drawFromDiscard(player, bestStealTarget);
             this.applySpeedToCard(player.drawnCard);
