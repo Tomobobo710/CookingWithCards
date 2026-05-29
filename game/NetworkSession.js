@@ -527,7 +527,8 @@ getFields: () => ({
 
     checkGameOver() {
         const activePlayers = this.game.state.players.filter(p => !p.won);
-        const humanAlive = !this.game.state.players[0].won;
+        const localPlayer = this.game.state.players.find(p => p.isLocal) || this.game.state.players[0];
+        const humanAlive = !localPlayer.won;
         return activePlayers.length <= 1 && humanAlive;
     }
 
@@ -549,7 +550,8 @@ getFields: () => ({
         }
 
         const winner = this.game.state.players.find(p => p.won);
-        if (!winner || winner.id !== 0) {
+        const localPlayer = this.game.state.players.find(p => p.isLocal) || this.game.state.players[0];
+        if (!winner || winner !== localPlayer) {
             // Human lost — flip bot cards
             this.game._botRevealed = false;
         }

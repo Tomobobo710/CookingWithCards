@@ -349,12 +349,13 @@ class Game {
         }
 
         if (this.gameState === 'playing' || (this.gameState === 'onlineMultiplayer' && this.networkSession && this.networkSession.isHost)) {
+            const localPlayer = this.findLocalPlayer();
             const player = this.state.getCurrentPlayer();
-            if (player.isHuman) {
+            if (localPlayer && player.isHuman && localPlayer === player) {
                 if (this.turnPhase === 'draw') {
-                    this.handleHumanDraw();
+                    this.handleLocalPlayerDraw(localPlayer);
                 } else if (this.turnPhase === 'discard') {
-                    this.handleHumanDiscard(player);
+                    this.handleLocalPlayerDiscard(localPlayer);
                 }
             }
         }
@@ -364,18 +365,17 @@ class Game {
             const isMyTurn = this.networkSession.gameState.currentPlayerIndex === this.networkSession.localPlayerIndex;
             if (localPlayer && localPlayer.isHuman && isMyTurn) {
                 if (this.turnPhase === 'draw') {
-                    this.handleHumanDrawForPlayer(localPlayer);
+                    this.handleRemotePlayerDraw(localPlayer, this.networkSession.localPlayerIndex);
                 } else if (this.turnPhase === 'discard') {
-                    this.handleHumanDiscardForPlayer(localPlayer);
+                    this.handleRemotePlayerDiscard(localPlayer, this.networkSession.localPlayerIndex);
                 }
             }
         }
     }
 
-    handleHumanDraw() {
+    handleLocalPlayerDraw(player) {
         if (!this.input.isLeftMouseButtonJustPressed()) return;
 
-        const player = this.state.players[0];
         const pointer = this.input.getPointerPosition();
 
         const deckRect = this.getDeckRect();
@@ -388,7 +388,7 @@ class Game {
             this.state.drawFromDeck(player);
             card.flip();
             this.audio.play('draw', { volume: 0.3 });
-            this.afterHumanDraw(player);
+            this.afterLocalPlayerDraw(player);
             return;
         }
 
@@ -402,13 +402,13 @@ class Game {
                 card.moveTo(rect.x, rect.y);
                 this.state.drawFromDiscard(player, other);
                 this.audio.play('draw', { volume: 0.3 });
-                this.afterHumanDraw(player);
+                this.afterLocalPlayerDraw(player);
                 return;
             }
         }
     }
 
-    afterHumanDraw(player) {
+    afterLocalPlayerDraw(player) {
         this.turnPhase = 'discard';
         this.bestSets = this.state.findBestSets(player.getAllCards(), HOTPOT.GAME.SETS_TO_WIN);
 
@@ -424,7 +424,7 @@ class Game {
         }
     }
 
-    handleHumanDiscard(player) {
+    handleLocalPlayerDiscard(player) {
         if (!this.input.isLeftMouseButtonJustPressed()) return;
 
         const pointer = this.input.getPointerPosition();
@@ -437,7 +437,7 @@ class Game {
             }
         }
 
-        const handCards = this.getHandCardRects(0);
+        const handCards = this.getHandCardRectsForPlayer(player);
 
         for (let i = 0; i < player.hand.length; i++) {
             if (this.pointInRect(pointer, handCards[i])) {
@@ -451,7 +451,7 @@ class Game {
         }
 
         if (player.drawnCard) {
-            const drawnRect = this.getDrawnCardRect();
+            const drawnRect = this.getDrawnCardRectForPlayerObj(player);
             if (this.pointInRect(pointer, drawnRect)) {
                 const card = player.drawnCard;
                 this.applySpeedToCard(card);
@@ -462,7 +462,7 @@ class Game {
         }
     }
 
-    handleHumanDrawForPlayer(player) {
+    handleRemotePlayerDraw(player, playerIndex) {
         if (!this.input.isLeftMouseButtonJustPressed()) return;
         const pointer = this.input.getPointerPosition();
 
@@ -471,7 +471,7 @@ class Game {
 
         const deckRect = this.getDeckRect();
         if (this.pointInRect(pointer, deckRect) && deckAvailable) {
-            this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "drawDeck");
+            this.networkSession.sendPlayerAction(playerIndex, "drawDeck");
             return;
         }
 
@@ -480,29 +480,29 @@ class Game {
             if (other.discardPile.length === 0) continue;
             const rect = this.getDiscardRect(i);
             if (this.pointInRect(pointer, rect)) {
-                this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "drawDiscard", { sourcePlayerIndex: i });
+                this.networkSession.sendPlayerAction(playerIndex, "drawDiscard", { sourcePlayerIndex: i });
                 return;
             }
         }
     }
 
-    handleHumanDiscardForPlayer(player) {
+    handleRemotePlayerDiscard(player, playerIndex) {
         if (!this.input.isLeftMouseButtonJustPressed()) return;
         const pointer = this.input.getPointerPosition();
 
         if (this.state.canWin(player)) {
             this.eatButton.hovered = this.input.isElementHovered('eat_button');
             if (this.input.isElementJustPressed('eat_button')) {
-                this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "win");
+                this.networkSession.sendPlayerAction(playerIndex, "win");
                 return;
             }
         }
 
-        const handCards = this.getHandCardRects(0);
+        const handCards = this.getHandCardRectsForPlayer(player);
         for (let i = 0; i < player.hand.length; i++) {
             if (this.pointInRect(pointer, handCards[i])) {
                 const card = player.hand[i];
-                this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "discard", {
+                this.networkSession.sendPlayerAction(playerIndex, "discard", {
                     category: card.category,
                     ingredient: card.ingredient
                 });
@@ -511,9 +511,9 @@ class Game {
         }
 
         if (player.drawnCard) {
-            const drawnRect = this.getDrawnCardRect();
+            const drawnRect = this.getDrawnCardRectForPlayerObj(player);
             if (this.pointInRect(pointer, drawnRect)) {
-                this.networkSession.sendPlayerAction(this.networkSession.localPlayerIndex, "discard", {
+                this.networkSession.sendPlayerAction(playerIndex, "discard", {
                     category: player.drawnCard.category,
                     ingredient: player.drawnCard.ingredient
                 });
@@ -950,6 +950,31 @@ class Game {
 
     getDrawnCardRect() {
         return { x: HOTPOT.WIDTH / 2 + 200, y: HOTPOT.UI.DRAWN_Y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
+    }
+
+    findLocalPlayer() {
+        if (this.networkSession && this.networkSession.localPlayerIndex !== undefined) {
+            return this.state.players[this.networkSession.localPlayerIndex] || this.state.players[0];
+        }
+        return this.state.players[0];
+    }
+
+    getHandCardRectsForPlayer(player) {
+        if (player.isLocal || !this.networkSession) {
+            return this.getHandCardRects(0);
+        }
+        const playerIndex = this.state.players.indexOf(player);
+        if (playerIndex < 0) return [];
+        return this.getHandCardRects(playerIndex);
+    }
+
+    getDrawnCardRectForPlayerObj(player) {
+        if (player.isLocal || !this.networkSession) {
+            return this.getDrawnCardRect();
+        }
+        const playerIndex = this.state.players.indexOf(player);
+        if (playerIndex < 0) return this.getDrawnCardRect();
+        return this.getDrawnCardRectForPlayer(playerIndex);
     }
 
     // ---------- Draw ----------
@@ -1624,7 +1649,8 @@ class Game {
             this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.msgY + 40);
         }
 
-        if (isMyTurn && this.turnPhase === 'discard' && this.state.canWin(this.state.players[0])) {
+        const localPlayer = this.findLocalPlayer();
+        if (isMyTurn && this.turnPhase === 'discard' && this.state.canWin(localPlayer)) {
             this.eatButton.hovered = this.input.isElementHovered('eat_button');
             const btn = this.eatButton;
             this.gameCtx.fillStyle = btn.hovered ? '#43a047' : '#2e7d32';
@@ -1657,7 +1683,7 @@ class Game {
             this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
             this.gameCtx.font = 'bold 18px Arial';
 
-            const human = this.state.players[0];
+            const human = this.findLocalPlayer();
             if (human.sets.length > 0 || human.won) {
                 this.gameCtx.fillText(`Your sets: ${human.sets.length}`, HOTPOT.WIDTH / 2, 210);
             }
