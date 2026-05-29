@@ -139,7 +139,7 @@ class Game {
  setupPlayers(count) {
         const n = count || 4;
         this.state.players = [];
-        const positions = ['S', 'W', 'N', 'E'];
+        const positions = HOTPOT.POSITIONS;
         this.state.players.push(new NetworkedPlayer(0, 'You', true));
         this.state.players[0].playerNumber = 0;
         this.state.players[0].tablePosition = positions[0];

@@ -134,7 +134,7 @@ class HotpotNetworkSession {
 
         // Create remote player placeholders (up to 3 remote players)
         this.remotePlayers = [];
-        const positions = ['S', 'W', 'N', 'E'];
+        const positions = HOTPOT.POSITIONS;
         const maxRemote = 3;
         for (let i = 0; i < maxRemote; i++) {
             const remotePlayer = new (this.game.state.players[0].constructor)(
@@ -902,7 +902,7 @@ class HotpotNetworkSession {
             const localNum = localPlayer.playerNumber;
 
             // Assign positions: S=local, then W(local+1), N(local+2), E(local+3) mod 4
-			const positions = ['S', 'W', 'N', 'E'];
+			const positions = HOTPOT.POSITIONS;
             for (const p of this.game.state.players) {
                 const offset = ((p.playerNumber - localNum) % 4 + 4) % 4;
                 p.tablePosition = positions[offset];

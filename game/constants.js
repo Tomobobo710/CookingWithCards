@@ -2,7 +2,9 @@ const HOTPOT = {
     WIDTH: 800,
     HEIGHT: 600,
 
-   CATEGORIES: {
+    POSITIONS: ['S', 'W', 'N', 'E'],
+
+    CATEGORIES: {
         'Noodles':  { color: '#D4B896', icon: '🍜', ingredients: { 'Rice': '🍚', 'Wheat': '🌾', 'Glass': '🧊' } },
         'Fish':     { color: '#5B9BD5', icon: '🐟', ingredients: { 'Salmon': '🐠', 'Tuna': '🐡', 'Bass': '🐟' } },
         'Greens':   { color: '#70AD47', icon: '🥦', ingredients: { 'Spinach': '🍃', 'Kale': '🥬', 'Bok Choy': '🌿' } },
