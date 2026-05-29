@@ -608,75 +608,194 @@ class Game {
         return value;
     }
 
-    updateBotTurn(player) {
+updateBotTurn(player) {
+        const speedCfg = this.getSpeedConfig();
+
         if (!player.botStarted) {
             player.botStarted = true;
+            player.botPhase = 'idle';
             player.botTimer = 0;
+            player.botDrawSource = null;
+            player.botDiscardCard = null;
         }
 
         player.botTimer += 1;
-        const speedCfg = this.getSpeedConfig();
-        if (player.botTimer < speedCfg.botDelay + speedCfg.thinkExtra) return;
 
-        player.turnCount++;
+        if (player.botPhase === 'idle') {
+            if (player.botTimer >= speedCfg.botDelay) {
+                player.botPhase = 'draw';
+                player.botTimer = 0;
 
-        const cfg = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
+                // Decide draw source
+                const canSteal = [];
+                for (let i = 0; i < this.state.players.length; i++) {
+                    const p = this.state.players[i];
+                    if (p === player) continue;
+                    if (p.discardPile.length > 0) {
+                        canSteal.push(p);
+                    }
+                }
 
-        const canSteal = [];
-        for (let i = 0; i < this.state.players.length; i++) {
-            const p = this.state.players[i];
-            if (p === player) continue;
-            if (p.discardPile.length > 0) {
-                canSteal.push(p);
+                let bestStealValue = -Infinity;
+                let bestStealTarget = null;
+                for (const target of canSteal) {
+                    const card = target.discardPile[target.discardPile.length - 1];
+                    const v = this.botCardValue(card, player);
+                    if (v > bestStealValue) {
+                        bestStealValue = v;
+                        bestStealTarget = target;
+                    }
+                }
+
+                const cfg = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
+
+                if (bestStealTarget && bestStealValue >= cfg.stealThreshold) {
+                    this.state.drawFromDiscard(player, bestStealTarget);
+                    player.botDrawSource = 'discard';
+                    const discardRect = this.getDiscardRect(bestStealTarget.id);
+                    player.drawnCard.x = discardRect.x;
+                    player.drawnCard.y = discardRect.y;
+                    player.drawnCard.targetX = discardRect.x;
+                    player.drawnCard.targetY = discardRect.y;
+                    player.drawnCard.faceUp = true;
+                } else if (this.state.deck.length > 0) {
+                    this.state.drawFromDeck(player);
+                    player.botDrawSource = 'deck';
+                    const deckRect = this.getDeckRect();
+                    player.drawnCard.x = deckRect.x;
+                    player.drawnCard.y = deckRect.y;
+                    player.drawnCard.targetX = deckRect.x;
+                    player.drawnCard.targetY = deckRect.y;
+                    player.drawnCard.faceUp = false;
+                } else {
+                    this.state.drawFromDeck(player);
+                    player.botDrawSource = 'deck';
+                    if (!player.drawnCard) {
+                        player.botPhase = 'end';
+                        player.botTimer = 0;
+                        return;
+                    }
+                    const deckRect = this.getDeckRect();
+                    player.drawnCard.x = deckRect.x;
+                    player.drawnCard.y = deckRect.y;
+                    player.drawnCard.targetX = deckRect.x;
+                    player.drawnCard.targetY = deckRect.y;
+                    player.drawnCard.faceUp = false;
+                }
+
+                this.audio.play('draw', { volume: 0.2 });
+                this.applySpeedToCard(player.drawnCard);
             }
-        }
-
-        let bestStealValue = -Infinity;
-        let bestStealTarget = null;
-        for (const target of canSteal) {
-            const card = target.discardPile[target.discardPile.length - 1];
-            const v = this.botCardValue(card, player);
-            if (v > bestStealValue) {
-                bestStealValue = v;
-                bestStealTarget = target;
-            }
-        }
-
-        if (bestStealTarget && bestStealValue >= cfg.stealThreshold) {
-            this.state.drawFromDiscard(player, bestStealTarget);
-            this.applySpeedToCard(player.drawnCard);
-        } else if (this.state.deck.length > 0) {
-            this.state.drawFromDeck(player);
-            this.applySpeedToCard(player.drawnCard);
-        } else {
-            this.state.drawFromDeck(player);
-            if (!player.drawnCard) {
-                this.endTurn();
-                return;
-            }
-            this.applySpeedToCard(player.drawnCard);
-        }
-
-        this.audio.play('draw', { volume: 0.2 });
-
-        if (this.state.canWin(player)) {
-            this.handleWin(player);
-            player.botStarted = false;
             return;
         }
 
-        const allCards = player.getAllCards();
-        const scored = allCards.map(c => ({ card: c, value: this.botCardValue(c, player) }));
-        scored.sort((a, b) => a.value - b.value);
+        if (player.botPhase === 'draw') {
+            const drawRect = this.getDrawnCardRectForPlayer(player.id);
+            player.drawnCard.targetX = drawRect.x;
+            player.drawnCard.targetY = drawRect.y;
+            player.drawnCard.targetScale = 0.5625;
 
-        const discardIdx = Math.min(cfg.discardIndex, scored.length - 1);
-        const discardCard = scored[discardIdx].card;
+            if (player.botDrawSource === 'discard') {
+                const handAngle = player.id === 1 ? Math.PI / 2 : (player.id === 2 ? Math.PI : -Math.PI / 2);
+                player.drawnCard.targetRotation = handAngle;
+            }
 
-        this.applySpeedToCard(discardCard);
-        this.state.discardCard(player, discardCard);
-        this.audio.play('discard', { volume: 0.2 });
-        this.endTurn();
-        player.botStarted = false;
+            const drawAnimDuration = speedCfg.botDelay + speedCfg.thinkExtra;
+            if (player.botTimer >= drawAnimDuration) {
+                if (player.botDrawSource === 'discard') {
+                    player.drawnCard.flip();
+                }
+                player.botPhase = 'think';
+                player.botTimer = 0;
+            }
+            return;
+        }
+
+        if (player.botPhase === 'think') {
+            const thinkDuration = speedCfg.thinkExtra * 2;
+            if (player.botTimer >= thinkDuration) {
+                player.botPhase = 'discard';
+                player.botTimer = 0;
+
+                // Decide what to discard AFTER drawing, considering all 9 cards
+                const allCards = player.getAllCards();
+                const scored = allCards.map(c => ({ card: c, value: this.botCardValue(c, player) }));
+                scored.sort((a, b) => a.value - b.value);
+
+                const cfg = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
+                const discardIdx = Math.min(cfg.discardIndex, scored.length - 1);
+                player.botDiscardCard = scored[discardIdx].card;
+
+                if (this.state.canWin(player)) {
+                    this.handleWin(player);
+                    player.botStarted = false;
+                    return;
+                }
+            }
+            return;
+        }
+
+        if (player.botPhase === 'discard') {
+            const isDiscardingDrawnCard = (player.botDiscardCard === player.drawnCard);
+
+            if (isDiscardingDrawnCard) {
+                // Discard the drawn card: animate from drawn position to discard pile
+                const discardPileRect = this.getDiscardRect(player.id);
+                player.drawnCard.targetX = discardPileRect.x;
+                player.drawnCard.targetY = discardPileRect.y;
+
+                const discardAnimDuration = speedCfg.botDelay + speedCfg.thinkExtra;
+                if (player.botTimer >= discardAnimDuration) {
+                    this.applySpeedToCard(player.drawnCard);
+                    this.state.discardCard(player, player.drawnCard);
+                    this.audio.play('discard', { volume: 0.2 });
+                    this.endTurn();
+                    player.botStarted = false;
+                }
+            } else {
+                // Discard a hand card: animate it from hand to discard pile
+                const discardedCard = player.botDiscardCard;
+                if (discardedCard) {
+                    const discardPileRect = this.getDiscardRect(player.id);
+                    discardedCard.targetX = discardPileRect.x;
+                    discardedCard.targetY = discardPileRect.y;
+
+                    const discardAnimDuration = speedCfg.botDelay + speedCfg.thinkExtra;
+                    if (player.botTimer >= discardAnimDuration) {
+                        this.applySpeedToCard(discardedCard);
+                        this.state.discardCard(player, discardedCard);
+                        this.audio.play('discard', { volume: 0.2 });
+
+                        // Now move drawn card into hand
+                        player.drawnCard.faceUp = false;
+                        const handRects = this.getHandCardRects(player.id);
+                        if (handRects.length > 0) {
+                            const lastRect = handRects[handRects.length - 1];
+                            player.drawnCard.targetX = lastRect.x;
+                            player.drawnCard.targetY = lastRect.y;
+                        }
+
+                        const handAnimDuration = speedCfg.botDelay + speedCfg.thinkExtra;
+                        if (player.botTimer >= discardAnimDuration + handAnimDuration) {
+                            player.hand.push(player.drawnCard);
+                            player.drawnCard = null;
+                            this.endTurn();
+                            player.botStarted = false;
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        if (player.botPhase === 'end') {
+            const endDuration = speedCfg.botDelay + speedCfg.thinkExtra;
+            if (player.botTimer >= endDuration) {
+                this.endTurn();
+                player.botStarted = false;
+            }
+            return;
+        }
     }
 
     endTurn() {
@@ -762,6 +881,38 @@ class Game {
         ];
         const pos = positions[playerIndex];
         return { x: pos.x, y: pos.y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
+    }
+
+    getDrawnCardRectForPlayer(playerIndex) {
+        const cardScale = 0.5625;
+        const fw = 80 * cardScale;
+        const fh = 115 * cardScale;
+        const spacing = 6;
+
+        const cards = this.state.players[playerIndex].hand;
+        if (cards.length === 0) return { x: 0, y: 0, w: 0, h: 0 };
+
+        const visualH = fh;
+        const visualW = fw;
+        const totalH = cards.length * visualH + (cards.length - 1) * spacing;
+        const totalW = cards.length * visualW + (cards.length - 1) * spacing;
+
+        let cx, cy;
+
+        if (playerIndex === 1) {
+            cx = fw / 2 + 12 + fw + 8 + fw / 2;
+            cy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * visualH) / 2;
+        } else if (playerIndex === 2) {
+            cx = (HOTPOT.WIDTH - totalW) / 2 + (cards.length * visualW) / 2;
+            cy = fh / 2 + 10 + fh + 8 + fh / 2;
+        } else if (playerIndex === 3) {
+            cx = HOTPOT.WIDTH - fw / 2 - 12 - fw - 8 - fw / 2;
+            cy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * visualH) / 2;
+        } else {
+            return this.getDrawnCardRect();
+        }
+
+        return { x: cx - fw / 2, y: cy - fh / 2, w: fw, h: fh };
     }
 
     getHandCardRects(playerIndex) {
@@ -1355,17 +1506,18 @@ class Game {
         const cards = player.hand;
         if (cards.length === 0) return;
 
-        const cardScale = 0.5625;
+       const cardScale = 0.5625;
         const spacing = 6;
         const fw = 80 * cardScale;
         const fh = 115 * cardScale;
+        const drawnCardPadding = 8;
+        const handAngle = index === 1 ? Math.PI / 2 : (index === 2 ? Math.PI : -Math.PI / 2);
 
         for (let i = 0; i < cards.length; i++) {
             const card = cards[i];
             card.scaleTo(cardScale);
             if (this.gameState !== 'gameOver') card.faceUp = false;
 
-            const handAngle = index === 1 ? Math.PI / 2 : (index === 2 ? Math.PI : -Math.PI / 2);
             if (Math.abs(card.rotation - card.targetRotation) < 0.5) {
                 card.rotateTo(handAngle);
             }
@@ -1393,6 +1545,14 @@ class Game {
 
             card.moveTo(cx - fw / 2, cy - fh / 2);
             card.draw(this.gameCtx);
+        }
+
+        if (player.drawnCard) {
+            const dc = player.drawnCard;
+            dc.scaleTo(cardScale);
+            if (this.gameState !== 'gameOver') dc.faceUp = false;
+            dc.rotateTo(handAngle);
+            dc.draw(this.gameCtx);
         }
 
         const cfgLbl = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
