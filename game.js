@@ -1683,8 +1683,13 @@ class Game {
             dc.draw(this.gameCtx);
         }
 
-        const cfgLbl = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
-        const info = player.isRemote ? player.name : `${player.name} [${cfgLbl.desc}]`;
+       let info;
+        if (!player.isHuman) {
+            const cfgLbl = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
+            info = `${player.name} [${cfgLbl.desc}]`;
+        } else {
+            info = player.name;
+        }
         this.gameCtx.font = '10px Arial';
         this.gameCtx.textBaseline = 'middle';
         if (index === 1) {
