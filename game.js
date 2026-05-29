@@ -209,7 +209,6 @@ class GameState {
         if (removed) {
             card.faceUp = true;
             card.scaleTo(0.75);
-            // Spin and end at 0° (readable on discard pile)
             const currentMod = ((card.rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
             const toZero = (2 * Math.PI) - currentMod;
             const extraSpins = Math.PI * 2 * (1 + Math.floor(Math.random() * 1.5));
@@ -311,13 +310,63 @@ class Game {
         this.settingsButtons = [];
         this.msgY = 110;
 
-        this.setupPlayers();
-        this.setupUI();
+        // Menu system
+        this.menuStack = { current: null, previous: null };
+        this.menuManager = new HotpotMenuManager(this);
+        this.menuInputManager = new HotpotMenuInputManager(this, input);
+        this.waitingMenuInputManager = new HotpotWaitingMenusInputManager(this, input);
+
+        // Online multiplayer
+        this.gui = null;
+        this.networkSession = null;
+        this.playerCount = 4; // default for local multiplayer
+
+        // Menu button references (used in rendering)
+        this.menuButton = { id: 'menu_button', x: 300, y: 300, width: 200, height: 60, hovered: false };
+        this.restartButton = { id: 'restart_button', x: 300, y: 370, width: 200, height: 60, hovered: false };
+        this.eatButton = { id: 'eat_button', x: 300, y: 300, width: 200, height: 50, hovered: false };
+        this.settingsButton = { x: HOTPOT.WIDTH - 90, y: 10, w: 80, h: 30, hovered: false };
+
+        // Register eat button for input (Let's Eat / win button)
+        this.input.registerElement('eat_button', {
+            bounds: () => ({ x: this.eatButton.x, y: this.eatButton.y, width: this.eatButton.width, height: this.eatButton.height })
+        });
+
+        // Register restart button for input (game over screen)
+        this.input.registerElement('restart_button', {
+            bounds: () => ({ x: this.restartButton.x, y: this.restartButton.y, width: this.restartButton.width, height: this.restartButton.height })
+        });
+
+        // Register menu button for input (title screen)
+        this.input.registerElement('menu_button', {
+            bounds: () => ({ x: this.menuButton.x, y: this.menuButton.y, width: this.menuButton.width, height: this.menuButton.height })
+        });
+
+        // Aliases for MenuInputManager
+        this.mainMenu = this.menuManager.mainMenu;
+        this.multiplayerMenu = this.menuManager.multiplayerMenu;
+        this.localMultiplayerMenu = this.menuManager.localMultiplayerMenu;
+        this.gameOverMenu = this.menuManager.gameOverMenu;
+        this.onlineGameOverMenu = this.menuManager.onlineGameOverMenu;
+        this.rematchPendingMenu = this.menuManager.rematchPendingMenu;
+        this.waitingMenu = this.menuManager.waitingMenu;
+        this.waitingCanceledMenu = this.menuManager.waitingCanceledMenu;
+        this.waitingForHostMenu = this.menuManager.waitingForHostMenu;
+        this.opponentDisconnectedMenu = this.menuManager.opponentDisconnectedMenu;
+        this.roomShutDownMenu = this.menuManager.roomShutDownMenu;
+
         this.setupAudio();
 
         this.animationTime = 0;
         this.lastTime = performance.now();
     }
+
+    get menuManager() { return this._menuManager; }
+    set menuManager(v) { this._menuManager = v; }
+    get menuInputManager() { return this._menuInputManager; }
+    set menuInputManager(v) { this._menuInputManager = v; }
+    get waitingMenuInputManager() { return this._waitingMenuInputManager; }
+    set waitingMenuInputManager(v) { this._waitingMenuInputManager = v; }
 
     getSpeedConfig() {
         return HOTPOT.SPEEDS[this.currentSpeed] || HOTPOT.SPEEDS[2];
@@ -342,32 +391,14 @@ class Game {
         }
     }
 
-    setupPlayers() {
-        this.state.players = [
-            new PlayerEntity(0, 'You', true),
-            new PlayerEntity(1, 'Bot 1', false, 1 + Math.floor(Math.random() * 3)),
-            new PlayerEntity(2, 'Bot 2', false, 1 + Math.floor(Math.random() * 3)),
-            new PlayerEntity(3, 'Bot 3', false, 1 + Math.floor(Math.random() * 3))
-        ];
-    }
-
-    setupUI() {
-        this.menuButton = { id: 'menu_button', x: 300, y: 300, width: 200, height: 60, hovered: false };
-        this.input.registerElement('menu_button', {
-            bounds: () => ({ x: this.menuButton.x, y: this.menuButton.y, width: this.menuButton.width, height: this.menuButton.height })
-        });
-
-        this.restartButton = { id: 'restart_button', x: 300, y: 370, width: 200, height: 60, hovered: false };
-        this.input.registerElement('restart_button', {
-            bounds: () => ({ x: this.restartButton.x, y: this.restartButton.y, width: this.restartButton.width, height: this.restartButton.height })
-        });
-
-        this.eatButton = { id: 'eat_button', x: 300, y: 300, width: 200, height: 50, hovered: false };
-        this.input.registerElement('eat_button', {
-            bounds: () => ({ x: this.eatButton.x, y: this.eatButton.y, width: this.eatButton.width, height: this.eatButton.height })
-        });
-
-        this.settingsButton = { x: HOTPOT.WIDTH - 90, y: 10, w: 80, h: 30, hovered: false };
+    setupPlayers(count) {
+        const n = count || 4;
+        this.state.players = [];
+        this.state.players.push(new PlayerEntity(0, 'You', true));
+        for (let i = 1; i < n; i++) {
+            this.state.players.push(new PlayerEntity(i, 'Bot ' + i, false, 1 + Math.floor(Math.random() * 3)));
+        }
+        this.playerCount = n;
     }
 
     setupAudio() {
@@ -377,29 +408,26 @@ class Game {
         this.audio.createComplexSound('win', { frequencies: [523, 659, 784, 1047], types: ['sine', 'sine', 'sine', 'sine'], mix: [0.3, 0.3, 0.2, 0.2], duration: 1.0, envelope: { attack: 0.1, decay: 0.3, sustain: 0.4, release: 0.6 } });
     }
 
-    startGame() {
+    startGame(playerCount) {
+        const n = playerCount || 4;
         this.state.reset();
-        this.setupPlayers();
+        this.setupPlayers(n);
         const deckRect = this.getDeckRect();
         this.state.createDeck(deckRect);
         this.state.dealInitialHands();
         this.state.gamePhase = 'playing';
-        this.gameState = 'playing';
         this.turnPhase = 'draw';
-        this.turnTimer = 0;
-
-        this.sortHandByCategory(this.state.players[0]);
-        this.state.players[0].hasDrawn = false;
-        this.state.players[0].drawnCard = null;
         this.bestSets = [];
         this._botRevealed = false;
 
-        // Apply speed to remaining deck cards
         for (const card of this.state.deck) {
             this.applySpeedToCard(card);
         }
 
-      // Deal animation: animate all hands from deck to final positions with spin
+        this.sortHandByCategory(this.state.players[0]);
+        this.state.players[0].hasDrawn = false;
+        this.state.players[0].drawnCard = null;
+
         const humanRects = this.getHandCardRects(0);
         for (let i = 0; i < this.state.players[0].hand.length; i++) {
             const rect = humanRects[i];
@@ -419,6 +447,25 @@ class Game {
         }
     }
 
+    startSinglePlayer() {
+        this.startGame(4);
+        this.gameState = 'playing';
+    }
+
+    startLocalMultiplayer(count) {
+        this.startGame(count);
+        this.gameState = 'playing';
+    }
+
+    clearGameState() {
+        this.state.reset();
+        this.turnPhase = 'draw';
+        this.turnTimer = 0;
+        this.bestSets = [];
+        this._botRevealed = false;
+        this.settingsOpen = false;
+    }
+
     // ---------- Update Loop ----------
     action_update() {
         const now = performance.now();
@@ -427,13 +474,20 @@ class Game {
         this.animationTime += dt;
 
         this.updateCards();
+
+        // Handle online GUI
+        if (this.gameState === 'multiplayerLogin' && this.gui) {
+            this.gui.action_update(dt);
+            this.handleInput();
+            return;
+        }
+
         this.handleInput();
 
         if (this.gameState === 'playing') {
             this.updateGameLogic(dt);
         }
 
-        // Game over — reveal all bot hands with a flip
         if (this.gameState === 'gameOver' && !this._botRevealed) {
             this._botRevealed = true;
             for (const p of this.state.players) {
@@ -497,19 +551,55 @@ class Game {
             return;
         }
 
+        // Menu navigation
         if (this.gameState === 'menu') {
-            this.menuButton.hovered = this.input.isElementHovered('menu_button');
-            if (this.input.isElementJustPressed('menu_button')) {
-                this.startGame();
-            }
+            this.menuInputManager.handleMainMenuInput();
+            return;
+        }
+
+        if (this.menuStack.current === 'multiplayer') {
+            this.menuInputManager.handleMultiplayerMenuInput();
+            return;
+        }
+
+        if (this.menuStack.current === 'localMultiplayer') {
+            this.menuInputManager.handleLocalMultiplayerMenuInput();
             return;
         }
 
         if (this.gameState === 'gameOver') {
-            this.restartButton.hovered = this.input.isElementHovered('restart_button');
-            if (this.input.isElementJustPressed('restart_button')) {
-                this.startGame();
-            }
+            this.menuInputManager.handleGameOverMenuInput();
+            return;
+        }
+
+        // Online waiting menus
+        if (this.gameState === 'waitingMenu') {
+            this.waitingMenuInputManager.handleWaitingMenuInput();
+            return;
+        }
+
+        if (this.gameState === 'waitingCanceledMenu') {
+            this.waitingMenuInputManager.handleWaitingCanceledMenuInput();
+            return;
+        }
+
+        if (this.gameState === 'waitingForHostMenu') {
+            this.waitingMenuInputManager.handleWaitingForHostMenuInput();
+            return;
+        }
+
+        if (this.gameState === 'opponentDisconnected') {
+            this.waitingMenuInputManager.handleOpponentDisconnectedInput();
+            return;
+        }
+
+        if (this.gameState === 'roomShutDown') {
+            this.waitingMenuInputManager.handleRoomShutDownInput();
+            return;
+        }
+
+        if (this.gameState === 'rematchPending') {
+            this.waitingMenuInputManager.handleRematchPendingInput();
             return;
         }
 
@@ -565,9 +655,7 @@ class Game {
         this.turnPhase = 'discard';
         this.bestSets = this.state.findBestSets(player.getAllCards(), HOTPOT.GAME.SETS_TO_WIN);
 
-        // Clear previous highlights
         for (const c of player.getAllCards()) c.highlighted = null;
-        // Set new highlights
         for (const set of this.bestSets) {
             const type = set[0].ingredient === set[1].ingredient ? 'triple' : 'category';
             for (const c of set) c.highlighted = type;
@@ -640,7 +728,6 @@ class Game {
         }
     }
 
-    // — Bot Card Evaluation: returns how valuable this card is to the player (higher = keep) —
     botCardValue(card, player) {
         const allCards = player.getAllCards();
 
@@ -663,24 +750,17 @@ class Game {
 
         let value = 0;
 
-        // Completes a triple (3 of same ingredient)
         if (ingTotal >= 3) value += 200;
-        // One away from triple
         else if (ingTotal === 2) value += 80;
 
-        // Completes a category set (3 distinct ingredients)
         if (distinctTotal >= 3) value += 150;
-        // One away from category set
         else if (distinctTotal === 2) value += 40;
 
-        // Category investment
         if (catTotal >= 3) value += 20;
         else if (catTotal === 2) value += 8;
 
-        // 4th+ copy — redundant
         if (ingTotal >= 4) value -= 150;
 
-        // Loner — only card in its category
         if (catTotal <= 1) value -= 15;
 
         return value;
@@ -700,7 +780,6 @@ class Game {
 
         const cfg = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
 
-        // — Draw phase: evaluate steals vs deck draw —
         const canSteal = [];
         for (let i = 0; i < this.state.players.length; i++) {
             const p = this.state.players[i];
@@ -710,7 +789,6 @@ class Game {
             }
         }
 
-        // Find best steal target by card value
         let bestStealValue = -Infinity;
         let bestStealTarget = null;
         for (const target of canSteal) {
@@ -738,19 +816,16 @@ class Game {
 
         this.audio.play('draw', { volume: 0.2 });
 
-        // — Check win before discarding —
         if (this.state.canWin(player)) {
             this.handleWin(player);
             player.botStarted = false;
             return;
         }
 
-        // — Discard phase: rank all cards, drop the worst —
         const allCards = player.getAllCards();
         const scored = allCards.map(c => ({ card: c, value: this.botCardValue(c, player) }));
-        scored.sort((a, b) => a.value - b.value); // ascending — worst first
+        scored.sort((a, b) => a.value - b.value);
 
-        // difficulty-based mistake: some bots discard the Nth-worst instead of the worst
         const discardIdx = Math.min(cfg.discardIndex, scored.length - 1);
         const discardCard = scored[discardIdx].card;
 
@@ -761,7 +836,6 @@ class Game {
         player.botStarted = false;
     }
 
-    // ---------- End Turn ----------
     endTurn() {
         const actingPlayer = this.state.getCurrentPlayer();
         actingPlayer.hasDrawn = false;
@@ -801,14 +875,12 @@ class Game {
 
         this.turnPhase = 'draw';
         this.bestSets = [];
-        // Clear highlights from all cards
         for (const p of this.state.players) {
             for (const c of p.hand) c.highlighted = null;
             if (p.drawnCard) p.drawnCard.highlighted = null;
         }
     }
 
-    // ---------- Hit Testing ----------
     sortHandByCategory(player) {
         const categoryOrder = Object.keys(HOTPOT.CATEGORIES);
         const ingredientOrder = {};
@@ -832,21 +904,20 @@ class Game {
         return { x: cx - HOTPOT.UI.CARD_WIDTH / 2, y: cy - HOTPOT.UI.CARD_HEIGHT / 2, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
     }
 
-getDiscardRect(playerIndex) {
+    getDiscardRect(playerIndex) {
         const cx = HOTPOT.WIDTH / 2;
         const cy = HOTPOT.HEIGHT / 2;
         const gap = 50;
         const hw = HOTPOT.UI.CARD_WIDTH / 2;
         const hh = HOTPOT.UI.CARD_HEIGHT / 2;
 
-        // Player 0 = bottom (South), Player 1 = left (West), Player 2 = top (North), Player 3 = right (East)
         const distV = hh + gap;
         const distH = hw + gap / 2 + 12.5;
         const positions = [
-            { x: cx - hw, y: cy + distV - hh },  // South — player 0 (bottom)
-            { x: cx - distH - hw, y: cy - hh },   // West  — player 1 (left)
-            { x: cx - hw, y: cy - distV - hh },   // North — player 2 (top)
-            { x: cx + distH - hw, y: cy - hh }    // East  — player 3 (right)
+            { x: cx - hw, y: cy + distV - hh },
+            { x: cx - distH - hw, y: cy - hh },
+            { x: cx - hw, y: cy - distV - hh },
+            { x: cx + distH - hw, y: cy - hh }
         ];
         const pos = positions[playerIndex];
         return { x: pos.x, y: pos.y, w: HOTPOT.UI.CARD_WIDTH, h: HOTPOT.UI.CARD_HEIGHT };
@@ -918,6 +989,7 @@ getDiscardRect(playerIndex) {
         } else if (this.gameState === 'playing' || this.gameState === 'gameOver') {
             this.drawGameTable();
         }
+        // multiplayerLogin: GUI canvas handles rendering
     }
 
     drawMenuScreen() {
@@ -930,15 +1002,24 @@ getDiscardRect(playerIndex) {
         this.gameCtx.fillStyle = '#cccccc';
         this.gameCtx.fillText('A Palia-style Set Building Card Game', HOTPOT.WIDTH / 2, 220);
 
-        const btn = this.menuButton;
-        this.gameCtx.fillStyle = btn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
-        this.gameCtx.fillRect(btn.x, btn.y, btn.width, btn.height);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.gameCtx.lineWidth = 3;
-        this.gameCtx.strokeRect(btn.x, btn.y, btn.width, btn.height);
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 24px Arial';
-        this.gameCtx.fillText('START GAME', btn.x + btn.width / 2, btn.y + btn.height / 2 + 8);
+        // Draw menu buttons from menu manager
+        const menu = this.menuManager.mainMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 250, spacing = 75;
+        for (let i = 0; i < menu.buttons.length; i++) {
+            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+            const y = startY + i * spacing;
+            const isHovered = this.input.isElementHovered(`hotpot_main_button_${i}`);
+            const isSelected = menu.selectedIndex === i;
+
+            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.gameCtx.lineWidth = 3;
+            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.gameCtx.font = 'bold 24px Arial';
+            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 8);
+        }
 
         this.gameCtx.font = '15px Arial';
         this.gameCtx.fillStyle = '#888888';
@@ -951,7 +1032,70 @@ getDiscardRect(playerIndex) {
             'Draw from deck or steal an opponent\'s discard',
             'Discard 1 card to end your turn'
         ];
-        lines.forEach((l, i) => this.gameCtx.fillText(l, HOTPOT.WIDTH / 2, 390 + i * 22));
+        lines.forEach((l, i) => this.gameCtx.fillText(l, HOTPOT.WIDTH / 2, 400 + i * 22));
+    }
+
+    drawMultiplayerMenuScreen() {
+        const menu = this.menuManager.multiplayerMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 220, spacing = 75;
+
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 36px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('MULTIPLAYER', HOTPOT.WIDTH / 2, 150);
+
+        for (let i = 0; i < menu.buttons.length; i++) {
+            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+            const y = startY + i * spacing;
+            const isHovered = this.input.isElementHovered(`hotpot_mp_button_${i}`);
+            const isSelected = menu.selectedIndex === i;
+
+            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.gameCtx.lineWidth = 3;
+            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.gameCtx.font = 'bold 24px Arial';
+            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 8);
+        }
+    }
+
+    drawLocalMultiplayerMenuScreen() {
+        const menu = this.menuManager.localMultiplayerMenu;
+        const buttonWidth = 240, buttonHeight = 60, startY = 220, spacing = 75;
+
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 36px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText('LOCAL MULTIPLAYER', HOTPOT.WIDTH / 2, 150);
+
+        for (let i = 0; i < menu.buttons.length; i++) {
+            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+            const y = startY + i * spacing;
+            const isHovered = this.input.isElementHovered(`hotpot_local_mp_button_${i}`);
+            const isSelected = menu.selectedIndex === i;
+
+            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.gameCtx.lineWidth = 3;
+            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.gameCtx.font = 'bold 24px Arial';
+            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 8);
+        }
+    }
+
+    drawWaitingMenuScreen(title) {
+        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.gameCtx.font = 'bold 36px Arial';
+        this.gameCtx.textAlign = 'center';
+        this.gameCtx.fillText(title, HOTPOT.WIDTH / 2, 200);
+
+        this.gameCtx.font = '18px Arial';
+        this.gameCtx.fillStyle = '#cccccc';
+        this.gameCtx.fillText('Waiting for other players...', HOTPOT.WIDTH / 2, 250);
     }
 
     drawGameTable() {
@@ -973,7 +1117,7 @@ getDiscardRect(playerIndex) {
         if (this.gameState === 'gameOver') {
             this.drawGameOver();
         } else {
-       this.drawTurnInfo(currentPlayer);
+            this.drawTurnInfo(currentPlayer);
             if (currentPlayer && currentPlayer.isHuman) {
                 this.drawHumanPrompt(currentPlayer);
             }
@@ -999,8 +1143,6 @@ getDiscardRect(playerIndex) {
         this.gameCtx.font = '26px Arial';
         this.gameCtx.textAlign = 'center';
         this.gameCtx.fillText('🀄', rect.x + rect.w / 2, rect.y + rect.h / 2 + 8);
-
-        this.gameCtx.font = '13px Arial';
 
         if (isClickable && this.state.deck.length > 0) {
             this.gameCtx.fillStyle = '#ff6666';
@@ -1073,7 +1215,6 @@ getDiscardRect(playerIndex) {
             card.draw(this.gameCtx);
         }
 
-        // Draw category group labels
         if (handRects.length > 0) {
             let catStart = 0;
             let curCat = player.hand[0].category;
@@ -1107,7 +1248,6 @@ getDiscardRect(playerIndex) {
 
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 14px Arial';
-        this.gameCtx.textAlign = 'left';
         this.gameCtx.textAlign = 'center';
         this.gameCtx.fillText('Your Hand', HOTPOT.WIDTH / 2, HOTPOT.HEIGHT - 10);
 
@@ -1142,7 +1282,6 @@ getDiscardRect(playerIndex) {
             card.scaleTo(cardScale);
             if (this.gameState !== 'gameOver') card.faceUp = false;
 
-            // Set hand angle (starting hand cards); spinning cards keep their animation
             const handAngle = index === 1 ? Math.PI / 2 : (index === 2 ? Math.PI : -Math.PI / 2);
             if (Math.abs(card.rotation - card.targetRotation) < 0.5) {
                 card.rotateTo(handAngle);
@@ -1150,18 +1289,18 @@ getDiscardRect(playerIndex) {
 
             let cx, cy;
 
-            if (index === 1) {          // Left — vertical, 90°
+            if (index === 1) {
                 const visualH = fw;
                 const totalH = cards.length * visualH + (cards.length - 1) * spacing;
                 const startY = (HOTPOT.HEIGHT - totalH) / 2;
                 cx = fw / 2 + 12;
                 cy = startY + i * (visualH + spacing) + visualH / 2;
-            } else if (index === 2) {   // Top — horizontal, 180°
+            } else if (index === 2) {
                 const totalW = cards.length * fw + (cards.length - 1) * spacing;
                 const startX = (HOTPOT.WIDTH - totalW) / 2;
                 cx = startX + i * (fw + spacing) + fw / 2;
                 cy = fh / 2 + 10;
-            } else {                    // Right — vertical, 270°
+            } else {
                 const visualH = fw;
                 const totalH = cards.length * visualH + (cards.length - 1) * spacing;
                 const startY = (HOTPOT.HEIGHT - totalH) / 2;
@@ -1173,7 +1312,6 @@ getDiscardRect(playerIndex) {
             card.draw(this.gameCtx);
         }
 
-        // Mini info label at each bot's edge
         const cfgLbl = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
         const info = `${player.name} [${cfgLbl.desc}]`;
         this.gameCtx.font = '10px Arial';
@@ -1212,7 +1350,7 @@ getDiscardRect(playerIndex) {
         this.gameCtx.textBaseline = 'alphabetic';
     }
 
-  drawTurnInfo(currentPlayer) {
+    drawTurnInfo(currentPlayer) {
         if (!currentPlayer) return;
 
         const label = currentPlayer.isHuman ? 'YOUR TURN' : `${currentPlayer.name}'s TURN`;
@@ -1247,7 +1385,6 @@ getDiscardRect(playerIndex) {
     }
 
     drawHumanPrompt(player) {
-        // No extra prompt needed; drawTurnInfo handles it
     }
 
     drawGameOver() {
@@ -1280,18 +1417,26 @@ getDiscardRect(playerIndex) {
             }
         }
 
-        const btn = this.restartButton;
-        this.gameCtx.fillStyle = btn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
-        this.gameCtx.fillRect(btn.x, btn.y, btn.width, btn.height);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.gameCtx.lineWidth = 3;
-        this.gameCtx.strokeRect(btn.x, btn.y, btn.width, btn.height);
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 20px Arial';
-        this.gameCtx.fillText('PLAY AGAIN', btn.x + btn.width / 2, btn.y + btn.height / 2 + 7);
+        const menu = this.menuManager.getGameOverMenu(!!this.networkSession);
+        const buttonWidth = 240, buttonHeight = 60, startY = 350, spacing = 75;
+        for (let i = 0; i < menu.buttons.length; i++) {
+            const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
+            const y = startY + i * spacing;
+            const isHovered = this.input.isElementHovered(`hotpot_gameover_button_${i}`);
+            const isSelected = menu.selectedIndex === i;
+
+            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.gameCtx.lineWidth = 3;
+            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.gameCtx.font = 'bold 20px Arial';
+            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
+        }
     }
 
-   drawMessage() {
+    drawMessage() {
         this.gameCtx.fillStyle = 'rgba(0,0,0,0.8)';
         this.gameCtx.fillRect(150, this.msgY, 500, 50);
         this.gameCtx.strokeStyle = HOTPOT.COLORS.HIGHLIGHT;
@@ -1359,9 +1504,8 @@ getDiscardRect(playerIndex) {
 
         this.settingsButtons = [];
 
-        // Speed button
         const speedBtn = { x: HOTPOT.WIDTH / 2 - btnW / 2, y: btnY, w: btnW, h: btnH, hovered: false, action: 'speed' };
-        speedBtn.hovered = this.input.isElementHovered('settings_speed') || this.input.isElementHovered('settings_speed');
+        speedBtn.hovered = this.input.isElementHovered('settings_speed');
         this.gameCtx.fillStyle = speedBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BORDER;
         this.gameCtx.fillRect(speedBtn.x, speedBtn.y, btnW, btnH);
         this.gameCtx.strokeStyle = '#fff';
@@ -1372,9 +1516,8 @@ getDiscardRect(playerIndex) {
         this.gameCtx.fillText('Change Speed', speedBtn.x + btnW / 2, speedBtn.y + btnH / 2 + 5);
         this.settingsButtons.push(speedBtn);
 
-        // Close button
         const closeBtn = { x: HOTPOT.WIDTH / 2 - btnW / 2, y: btnY + 45, w: btnW, h: btnH, hovered: false, action: 'close' };
-        closeBtn.hovered = this.input.isElementHovered('settings_close') || this.input.isElementHovered('settings_close');
+        closeBtn.hovered = this.input.isElementHovered('settings_close');
         this.gameCtx.fillStyle = closeBtn.hovered ? '#a00000' : '#444';
         this.gameCtx.fillRect(closeBtn.x, closeBtn.y, btnW, btnH);
         this.gameCtx.strokeStyle = '#fff';
@@ -1385,7 +1528,6 @@ getDiscardRect(playerIndex) {
         this.gameCtx.fillText('Close', closeBtn.x + btnW / 2, closeBtn.y + btnH / 2 + 5);
         this.settingsButtons.push(closeBtn);
 
-        // Draw speed options
         this.gameCtx.font = '11px Arial';
         this.gameCtx.fillStyle = '#888';
         const speedKeys = Object.keys(HOTPOT.SPEEDS);
