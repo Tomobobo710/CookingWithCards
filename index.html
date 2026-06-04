@@ -206,6 +206,12 @@
                 <script src="game/constants.js"></script>
                 <script src="game/PlayerEntity.js"></script>
                 <script src="game/GameState.js"></script>
+                <!--Game Collaborator Classes (load order matters: layout & flow have no deps; bots need flow; input/renderer need everything) -->
+                <script src="game/GameLayout.js"></script>
+                <script src="game/GameFlow.js"></script>
+                <script src="game/GameBotController.js"></script>
+                <script src="game/GameInputController.js"></script>
+                <script src="game/GameRenderer.js"></script>
                 <script src="game.js"></script>
                 <!--------------------------------->
         </body>
