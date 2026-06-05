@@ -195,7 +195,7 @@
 
                 <!------Game Specific Modules------>
                 <!--Card Rendering Engine-->
-                <script src="Card.js"></script>
+                <script src="game/Card.js"></script>
                 <!--Menu System-->
                 <script src="game/MenuManager.js"></script>
                 <script src="game/MenuInputManager.js"></script>
@@ -211,6 +211,10 @@
                 <script src="game/GameFlow.js"></script>
                 <script src="game/GameBotController.js"></script>
                 <script src="game/GameInputController.js"></script>
+                <!--Renderer sub-classes must load before the orchestrator that wires them up -->
+                <script src="game/GameTableRenderer.js"></script>
+                <script src="game/GameMenuScreensRenderer.js"></script>
+                <script src="game/GameOverlaysRenderer.js"></script>
                 <script src="game/GameRenderer.js"></script>
                 <script src="game.js"></script>
                 <!--------------------------------->
