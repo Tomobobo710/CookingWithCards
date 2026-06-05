@@ -194,28 +194,29 @@
                 <!--------------------------------->
 
                 <!------Game Specific Modules------>
-                <!--Card Rendering Engine-->
-                <script src="game/Card.js"></script>
-                <!--Menu System-->
-                <script src="game/MenuManager.js"></script>
-                <script src="game/MenuInputManager.js"></script>
-                <script src="game/WaitingMenusInputManager.js"></script>
-                <script src="game/NetworkSession.js"></script>
-                <script src="game/ActionNetInputManager.js"></script>
-                <!--Game Bootstrap-->
-                <script src="game/constants.js"></script>
-                <script src="game/PlayerEntity.js"></script>
-                <script src="game/GameState.js"></script>
-                <!--Game Collaborator Classes (load order matters: layout & flow have no deps; bots need flow; input/renderer need everything) -->
-                <script src="game/GameLayout.js"></script>
-                <script src="game/GameFlow.js"></script>
-                <script src="game/GameBotController.js"></script>
-                <script src="game/GameInputController.js"></script>
-                <!--Renderer sub-classes must load before the orchestrator that wires them up -->
-                <script src="game/GameTableRenderer.js"></script>
-                <script src="game/GameMenuScreensRenderer.js"></script>
-                <script src="game/GameOverlaysRenderer.js"></script>
-                <script src="game/GameRenderer.js"></script>
+                <!--Core (entities, state, constants)-->
+                <script src="game/core/Card.js"></script>
+                <script src="game/core/Constants.js"></script>
+                <script src="game/core/PlayerEntity.js"></script>
+                <script src="game/core/GameState.js"></script>
+                <!--Menus (manager + input handlers) -->
+                <script src="game/menus/MenuManager.js"></script>
+                <script src="game/menus/MenuInputManager.js"></script>
+                <script src="game/menus/WaitingMenusInputManager.js"></script>
+                <!--Network (online multiplayer) -->
+                <script src="game/network/NetworkSession.js"></script>
+                <script src="game/network/ActionNetInputManager.js"></script>
+                <!--Controllers (input dispatch, turn flow, bot AI) -->
+                <script src="game/controllers/GameFlow.js"></script>
+                <script src="game/controllers/GameBotController.js"></script>
+                <script src="game/controllers/GameInputController.js"></script>
+                <!--Rendering (layout helper + sub-renderers + orchestrator) -->
+                <script src="game/rendering/GameLayout.js"></script>
+                <script src="game/rendering/GameTableRenderer.js"></script>
+                <script src="game/rendering/GameMenuScreensRenderer.js"></script>
+                <script src="game/rendering/GameOverlaysRenderer.js"></script>
+                <script src="game/rendering/GameRenderer.js"></script>
+                <!--Main game class (stays at project root) -->
                 <script src="game.js"></script>
                 <!--------------------------------->
         </body>
