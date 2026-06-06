@@ -104,7 +104,7 @@ class HotpotGameFlow {
         this.game.turnPhase = 'draw';
         this.game.bestSets = [];
         this.game._otherPlayersRevealed = false;
-        this.game.settingsOpen = false;
+        this.game.closeSettingsModal();
         this.game.settingsConfirmOpen = false;
     }
 

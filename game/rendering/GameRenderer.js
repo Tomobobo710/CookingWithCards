@@ -77,4 +77,5 @@ class HotpotGameRenderer {
     drawSettingsConfirmModal() {
         this.overlays.drawSettingsConfirmModal();
     }
-}
+
+    }

@@ -14,9 +14,13 @@ class HotpotGameInputController {
             this.game.debugEnabled = !this.game.debugEnabled;
         }
 
-        if (this.game.settingsOpen) {
+     if (this.game.settingsOpen) {
             if (this.input.isLeftMouseButtonJustPressed()) {
                 const pointer = this.input.getPointerPosition();
+
+                if (this.game.profileOpen) {
+                    return;
+                }
 
                 // Confirmation modal buttons
                 if (this.game.settingsConfirmOpen) {
@@ -24,7 +28,7 @@ class HotpotGameInputController {
                        if (this.game.layout.pointInRect(pointer, btn)) {
                             if (btn.action === 'confirmYes') {
                                 this.game.settingsConfirmOpen = false;
-                                this.game.settingsOpen = false;
+                                this.game.closeSettingsModal();
                                 if (this.game.networkSession) {
                                     this.game.networkSession.leave();
                                     this.game.networkSession = null;
@@ -47,10 +51,13 @@ class HotpotGameInputController {
                     return;
                 }
 
-                for (const btn of this.game.settingsButtons) {
+ for (const btn of this.game.settingsButtons) {
                     if (this.game.layout.pointInRect(pointer, btn)) {
                         if (btn.action === 'close') {
-                            this.game.settingsOpen = false;
+                            this.game.closeSettingsModal();
+                        } else if (btn.action === 'profile') {
+                            this.game.profileOpen = true;
+                            return;
                         } else if (btn.action === 'speed') {
                             this.game.currentSpeed = (this.game.currentSpeed % Object.keys(HOTPOT.SPEEDS).length) + 1;
                             localStorage.setItem('hotpot_speed', this.game.currentSpeed);
@@ -59,9 +66,11 @@ class HotpotGameInputController {
                             this.game.settingsConfirmOpen = true;
                             return;
                         }
-                        return;
+                   return;
                     }
                 }
+
+ 
             }
             return;
         }

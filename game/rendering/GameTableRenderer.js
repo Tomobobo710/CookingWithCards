@@ -298,7 +298,7 @@ class HotpotGameTableRenderer {
         this.gameCtx.fillText('⚙ Settings', btn.x + btn.w / 2, btn.y + btn.h / 2 + 4);
 
         if (this.input.isLeftMouseButtonJustPressed() && btn.hovered) {
-            this.game.settingsOpen = true;
+            this.game.openSettingsModal();
         }
     }
 

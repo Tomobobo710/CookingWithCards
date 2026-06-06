@@ -27,11 +27,17 @@ class Game {
         this.bestSets = [];
         this._otherPlayersRevealed = false;
         this.debugEnabled = false;
-        this.settingsOpen = false;
+       this.settingsOpen = false;
+        this.settingsButtonsRegistered = false;
         this.settingsConfirmOpen = false;
+        this.profileOpen = false;
+        this.profileUI = null;
         this.currentSpeed = parseInt(localStorage.getItem('hotpot_speed')) || 2;
         this.settingsButtons = [];
         this.msgY = 110;
+
+        // ActionUI instance for profile modal (game-layer UI)
+        this.profileActionUI = null;
 
         // Countdown overlay (used by online multiplayer)
         this.countdown = {
@@ -177,7 +183,7 @@ class Game {
         this.renderer.drawGameLayer();
         this.renderer.drawGUILayer();
         this.renderer.drawDebugLayer();
-        if (this.settingsOpen) {
+if (this.settingsOpen) {
             this.renderer.drawSettingsModal();
             if (this.settingsConfirmOpen) this.renderer.drawSettingsConfirmModal();
         }
@@ -185,6 +191,18 @@ class Game {
 
     // ---------- Delegations for external callers ----------
     // (NetworkSession, MenuInputManager, etc. call these on `this.game`)
+
+    openSettingsModal() {
+        this.settingsOpen = true;
+        this.renderer.overlays.registerSettingsButtons();
+    }
+
+    closeSettingsModal() {
+        this.settingsOpen = false;
+        this.settingsConfirmOpen = false;
+        this.profileOpen = false;
+        this.renderer.overlays.unregisterSettingsButtons();
+    }
 
     getSpeedConfig() { return this.flow.getSpeedConfig(); }
     applySpeedToCard(card) { return this.flow.applySpeedToCard(card); }
