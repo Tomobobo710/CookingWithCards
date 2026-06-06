@@ -80,11 +80,48 @@ const DIFFICULTY_LABELS = {
 };
 
 const NAMEPLATE_EMOJIS = {
-    human: ['🧑', '👤', '🧍', '🙋'],
-    bot: ['🤖', '👾', '🦾', '🎮', '🕹️']
+    human: [
+    // Faces
+    '😀','😃','😄','😁','😆','😅','😂','🤣','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','☺️','😚','😙',
+    '😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶',
+    '😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵',
+    '🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢',
+    '😭','😱','😖','😣','😞','😓','😩','😫','😤','😡','😠','🤬','😈','👿','💀','☠️',
+
+    // People (all genders)
+    '👶','🧒','👦','👧','🧑','👱','👨','👩','🧔','🧓','👴','👵',
+    '👨‍🦰','👩‍🦰','👨‍🦱','👩‍🦱','👨‍🦳','👩‍🦳','👨‍🦲','👩‍🦲',
+
+    // Gestures / hands
+    '👋','🤚','🖐','✋','🖖','👌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👍','👎',
+    '✊','👊','🤛','🤜','👏','🙌','🤝','🙏','🤲',
+
+    // Body parts
+    '👁','👀','👂','🦻','👃','👄','🦷','🦴','🧠',
+
+    // Activities / poses
+    '🧍','🧎','🙇',
+    '💁','🙅','🙆',
+    '🙋','🤦','🤷',
+    '🧘','🕺','💃','👯','🚶','🏃',
+
+    // Professions (all genders)
+    '👮','🕵️','💂','👷',
+    '👨‍⚕️','👩‍⚕️','👨‍🍳','👩‍🍳','👨‍🎓','👩‍🎓',
+    '👨‍🏫','👩‍🏫','👨‍🏭','👩‍🏭','👨‍💻','👩‍💻',
+    '👨‍🔧','👩‍🔧','👨‍🚀','👩‍🚀','👨‍🚒','👩‍🚒',
+
+    // Couples / families
+    '💑','👩‍❤️‍👨','👨‍❤️‍👨','👩‍❤️‍👩',
+    '💏','👩‍❤️‍💋‍👨','👨‍❤️‍💋‍👨','👩‍❤️‍💋‍👩',
+
+    // Human-adjacent symbols
+    '💘','💝','💖','💗','💓','💞','💕','💟','❣️','💔'
+    ],
+    bot: ['🤖', '💻', '🦾', '🖨️']
 };
 
-// ---------- End constants ----------
+const LOCAL_AVATAR_KEY = 'hotpot_avatar';
 
 class NamePlateRenderer {
     constructor(game) {
@@ -284,17 +321,46 @@ class NamePlateRenderer {
         return '#9e9e9e'; // gray for remote human
     }
 
-    _getAvatar(player, isLocal) {
+_getAvatar(player, isLocal) {
         if (isLocal) {
-            return NAMEPLATE_EMOJIS.human[0];
+            const saved = typeof localStorage !== 'undefined' && localStorage.getItem(LOCAL_AVATAR_KEY);
+            if (saved && NAMEPLATE_EMOJIS.human.includes(saved)) {
+                return saved;
+            }
+            // Pick random and save for next time
+            const idx = Math.floor(Math.random() * NAMEPLATE_EMOJIS.human.length);
+            const emoji = NAMEPLATE_EMOJIS.human[idx];
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(LOCAL_AVATAR_KEY, emoji);
+            }
+            return emoji;
         }
         if (!player.isHuman) {
-            const idx = (player.id || 0) % NAMEPLATE_EMOJIS.bot.length;
-            return NAMEPLATE_EMOJIS.bot[idx];
+            if (!player._avatar) {
+                const idx = Math.floor(Math.random() * NAMEPLATE_EMOJIS.bot.length);
+                player._avatar = NAMEPLATE_EMOJIS.bot[idx];
+            }
+            return player._avatar;
         }
         // Remote human players
         const idx = (player.id || 0) % NAMEPLATE_EMOJIS.human.length;
         return NAMEPLATE_EMOJIS.human[idx];
+    }
+
+    setLocalAvatar(emoji) {
+        if (typeof localStorage !== 'undefined' && NAMEPLATE_EMOJIS.human.includes(emoji)) {
+            localStorage.setItem(LOCAL_AVATAR_KEY, emoji);
+        }
+    }
+
+    getLocalAvatar() {
+        if (typeof localStorage !== 'undefined') {
+            const saved = localStorage.getItem(LOCAL_AVATAR_KEY);
+            if (saved && NAMEPLATE_EMOJIS.human.includes(saved)) {
+                return saved;
+            }
+        }
+        return null;
     }
 
 _drawEmojiBadge(ctx, x, y, emoji, color) {
