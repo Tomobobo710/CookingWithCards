@@ -7,6 +7,7 @@ class HotpotGameTableRenderer {
         this.game = game;
         this.gameCtx = game.gameCtx;
         this.input = game.input;
+        this.nameplate = new NamePlateRenderer(game);
     }
 
     // ---------- Update helpers ----------
@@ -128,6 +129,19 @@ class HotpotGameTableRenderer {
             slotIdx++;
         }
 
+        // Store player positions for nameplate overlay (drawn last)
+        this._nameplatePositions = [];
+        slotIdx = 0;
+        for (let offset = 1; offset < this.game.state.players.length; offset++) {
+            const remoteIdx = (localPlayerIndex + offset) % this.game.state.players.length;
+            if (remoteIdx >= this.game.state.players.length) continue;
+            this._nameplatePositions.push({ player: this.game.state.players[remoteIdx], index: visualSlots[slotIdx % visualSlots.length] });
+            slotIdx++;
+        }
+
+        // Draw nameplates on top of everything
+        this.drawNameplateOverlay();
+
         if (this.game.gameState === 'gameOver') {
             this.drawGameOver();
         } else {
@@ -165,6 +179,25 @@ class HotpotGameTableRenderer {
                 this.gameCtx.textAlign = 'center';
                 this.gameCtx.fillText('LET\'S EAT!', HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2 + 20);
             }
+        }
+    }
+
+    drawNameplateOverlay() {
+        if (!this._nameplatePositions) return;
+        for (const { player, index } of this._nameplatePositions) {
+            const w = this.nameplate.computeWidth(player);
+            let plateX, plateY;
+            if (index === 1) {
+                plateX = 8;
+                plateY = 546;
+            } else if (index === 3) {
+                plateX = HOTPOT.WIDTH - w - 8;
+                plateY = 546;
+            } else {
+                plateX = HOTPOT.WIDTH / 2 - w / 2;
+                plateY = 4;
+            }
+            this.nameplate.draw(player, index, plateX, plateY);
         }
     }
 
@@ -397,48 +430,6 @@ class HotpotGameTableRenderer {
 
             dc.draw(this.gameCtx);
         }
-
-        let info;
-        if (!player.isHuman) {
-            const cfgLbl = HOTPOT.BOT_AI[player.difficulty] || HOTPOT.BOT_AI[2];
-            info = `${player.name} [${cfgLbl.desc}]`;
-        } else {
-            info = player.name;
-        }
-        this.gameCtx.font = '10px Arial';
-        this.gameCtx.textBaseline = 'middle';
-        if (index === 1) {
-            this.gameCtx.fillStyle = 'rgba(0,0,0,0.7)';
-            this.gameCtx.fillRect(0, HOTPOT.HEIGHT - 16, 200, 16);
-            this.gameCtx.fillStyle = '#fff';
-            this.gameCtx.textAlign = 'left';
-            this.gameCtx.fillText(info, 4, HOTPOT.HEIGHT - 8);
-        } else if (index === 3) {
-            this.gameCtx.fillStyle = 'rgba(0,0,0,0.7)';
-            this.gameCtx.fillRect(HOTPOT.WIDTH - 200, HOTPOT.HEIGHT - 16, 200, 16);
-            this.gameCtx.fillStyle = '#fff';
-            this.gameCtx.textAlign = 'right';
-            this.gameCtx.fillText(info, HOTPOT.WIDTH - 4, HOTPOT.HEIGHT - 8);
-        } else {
-            this.gameCtx.fillStyle = 'rgba(0,0,0,0.7)';
-            this.gameCtx.fillRect(HOTPOT.WIDTH / 2 - 100, 0, 200, 16);
-            this.gameCtx.fillStyle = '#fff';
-            this.gameCtx.textAlign = 'center';
-            this.gameCtx.fillText(info, HOTPOT.WIDTH / 2, 8);
-        }
-        const cp = this.game.state.getCurrentPlayer();
-        if (cp === player) {
-            this.gameCtx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
-            this.gameCtx.font = 'bold 10px Arial';
-            if (index === 2) {
-                this.gameCtx.textAlign = 'center';
-                this.gameCtx.fillText('● THINKING', HOTPOT.WIDTH / 2, 18);
-            } else {
-                this.gameCtx.textAlign = index === 1 ? 'left' : 'right';
-                this.gameCtx.fillText('● THINKING', index === 1 ? 4 : HOTPOT.WIDTH - 4, HOTPOT.HEIGHT - 20);
-            }
-        }
-        this.gameCtx.textBaseline = 'alphabetic';
     }
 
     drawTurnInfo(currentPlayer) {
