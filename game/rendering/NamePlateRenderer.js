@@ -17,37 +17,38 @@ const NAMEPLATE = {
 
 // ---------- Avatar ----------
 const AVATAR = {
-    size: 20,
-    emojiGap: 8,           // gap between avatar right edge and name left edge
-    yOffset: -1,           // vertical offset from plate center
+    size: 25,
+    emojiGap: 10,          // gap between avatar right edge and name left edge
+    yOffset: 0,            // vertical offset from plate center
 };
 
 // ---------- Name ----------
 const NAME = {
-    fontSize: 11,
+    fontSize: 14,
     weight: 'bold',
     color: '#ffffff',
-    yOffset: 0,           // vertical offset from plate center
-    badgeGap: 6,          // gap between name end and first badge
+    yOffset: 0,            // vertical offset from plate center
+    badgeGap: 8,           // gap between name end and first badge
 };
 
 // ---------- Badges ----------
 const BADGE = {
-    fontSize: 7,
+    fontSize: 9,
     weight: 'bold',
     color: '#ffffff',
-    height: 13,
+    height: 16,
     borderRadius: 4,
-    textPadding: 8,        // horizontal padding inside badge
+    textPadding: 10,       // horizontal padding inside badge
     gap: 6,                // gap between badges in the row
     yOffset: 0,            // vertical offset from plate center (row position)
+    rectYOffset: 1,        // how much the badge rect is shifted up from the content center
 };
 
 // ---------- Thinking indicator ----------
 const THINKING = {
-    fontSize: 8,
+    fontSize: 10,
     weight: 'bold',
-    dotRadius: 2.5,
+    dotRadius: 3,
     textGap: 2,            // gap between dot and "THINKING" text
     pulseSpeed: 300,       // ms for one full pulse cycle
     pulseMin: 0.7,         // min alpha during pulse
@@ -116,6 +117,14 @@ class NamePlateRenderer {
             ctx.font = `${BADGE.weight} ${BADGE.fontSize}px Arial`;
             const badgeW = ctx.measureText(diffLabel).width + BADGE.textPadding;
             badgesW += badgeW;
+        }
+
+       // Wifi badge for remote humans only
+        const isRemoteHuman = player.isRemote && player.isHuman;
+        if (isRemoteHuman) {
+            ctx.font = `${BADGE.fontSize + 2}px Arial`;
+            const emojiW = ctx.measureText('📶').width;
+            badgesW += emojiW + BADGE.textPadding;
         }
 
         ctx.font = savedFont;
@@ -188,7 +197,7 @@ class NamePlateRenderer {
 
         // Badges inline after name
         let badgeX = nameX + nameW + NAME.badgeGap;
-        const badgeY = contentY + BADGE.yOffset;
+     const badgeY = contentY + BADGE.yOffset;
 
         // "YOU" badge for local player
         if (isLocal) {
@@ -202,6 +211,13 @@ class NamePlateRenderer {
             const diffLabel = DIFFICULTY_LABELS[player.difficulty] || 'Medium';
             const diffColor = DIFFICULTY_COLORS[player.difficulty] || '#ff9800';
             this._drawBadge(ctx, badgeX, badgeY, diffLabel, diffColor);
+        }
+
+        // Wifi badge for remote human players only
+        if (player.isRemote && player.isHuman) {
+            this._drawEmojiBadge(ctx, badgeX, badgeY, '📶', COLORS.localPlayer);
+            const wifiW = ctx.measureText('📶').width + BADGE.textPadding;
+            badgeX += wifiW + BADGE.gap;
         }
 
         ctx.restore();
@@ -281,18 +297,40 @@ class NamePlateRenderer {
         return NAMEPLATE_EMOJIS.human[idx];
     }
 
-    _drawBadge(ctx, x, y, text, color) {
-        ctx.font = `${BADGE.weight} ${BADGE.fontSize}px Arial`;
+_drawEmojiBadge(ctx, x, y, emoji, color) {
+        const emojiSize = BADGE.fontSize + 2;
+        ctx.font = `${emojiSize}px Arial`;
+        const tw = ctx.measureText(emoji).width;
+        const bw = tw + BADGE.textPadding;
+        const bh = BADGE.height;
+
+        // Badge background (shifted up by BADGE.rectYOffset)
+        const rectY = y - BADGE.rectYOffset;
+        ctx.fillStyle = color;
+        this._roundRect(ctx, x, rectY - bh / 2, bw, bh, BADGE.borderRadius);
+        ctx.fill();
+
+        // Emoji (centered on y)
+        ctx.fillStyle = BADGE.color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, x + bw / 2, y);
+    }
+
+_drawBadge(ctx, x, y, text, color) {
+        const fontSize = BADGE.fontSize;
+        ctx.font = `${BADGE.weight} ${fontSize}px Arial`;
         const tw = ctx.measureText(text).width;
         const bw = tw + BADGE.textPadding;
         const bh = BADGE.height;
 
-        // Badge background
+        // Badge background (shifted up by BADGE.rectYOffset)
+        const rectY = y - BADGE.rectYOffset;
         ctx.fillStyle = color;
-        this._roundRect(ctx, x, y - bh / 2, bw, bh, BADGE.borderRadius);
+        this._roundRect(ctx, x, rectY - bh / 2, bw, bh, BADGE.borderRadius);
         ctx.fill();
 
-        // Badge text
+        // Badge text (centered on y)
         ctx.fillStyle = BADGE.color;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

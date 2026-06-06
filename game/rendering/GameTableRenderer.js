@@ -182,22 +182,33 @@ class HotpotGameTableRenderer {
         }
     }
 
-    drawNameplateOverlay() {
+   drawNameplateOverlay() {
         if (!this._nameplatePositions) return;
         for (const { player, index } of this._nameplatePositions) {
             const w = this.nameplate.computeWidth(player);
             let plateX, plateY;
             if (index === 1) {
                 plateX = 8;
-                plateY = 546;
+                plateY = HOTPOT.HEIGHT / 2 - NAMEPLATE.height / 2;
             } else if (index === 3) {
                 plateX = HOTPOT.WIDTH - w - 8;
-                plateY = 546;
+                plateY = HOTPOT.HEIGHT / 2 - NAMEPLATE.height / 2;
             } else {
                 plateX = HOTPOT.WIDTH / 2 - w / 2;
                 plateY = 4;
             }
             this.nameplate.draw(player, index, plateX, plateY);
+        }
+
+        // Local player nameplate at bottom center
+        const localPlayer = this.game.flow.findLocalPlayer();
+        if (localPlayer) {
+            const displayName = localPlayer.isLocal ? (localPlayer.name === 'You' ? 'You' : localPlayer.name) : localPlayer.name;
+            const tempPlayer = { name: displayName, isHuman: true, isLocal: true, isRemote: false, difficulty: 2 };
+            const w = this.nameplate.computeWidth(tempPlayer);
+            const plateX = HOTPOT.WIDTH / 2 - w / 2;
+            const plateY = HOTPOT.HEIGHT - NAMEPLATE.height - 4;
+            this.nameplate.draw(tempPlayer, 0, plateX, plateY);
         }
     }
 
@@ -334,26 +345,7 @@ class HotpotGameTableRenderer {
             this.gameCtx.fillText('DRAWN', drawnRect.x + drawnRect.w / 2, drawnRect.y - 8);
         }
 
-        let playerLabel = '';
-        if (this.game.networkSession) {
-            for (let i = 0; i < this.game.state.players.length; i++) {
-                if (this.game.state.players[i] === player && this.game.state.players[i].isLocal) {
-                    playerLabel = player.name + "'s Hand (Player" + i + ")";
-                    break;
-                }
-            }
-            if (!playerLabel) {
-                playerLabel = player.name === 'You' ? 'Your Hand' : player.name + "'s Hand";
-            }
-        } else {
-            playerLabel = player.name === 'You' ? 'Your Hand' : player.name + "'s Hand";
-        }
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 14px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(playerLabel, HOTPOT.WIDTH / 2, HOTPOT.HEIGHT - 10);
-
-        if (player.sets.length > 0) {
+         if (player.sets.length > 0) {
             this.gameCtx.fillStyle = '#90ee90';
             this.gameCtx.font = '12px Arial';
             this.gameCtx.textAlign = 'left';
