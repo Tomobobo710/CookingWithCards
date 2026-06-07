@@ -43,11 +43,17 @@ class HotpotGameOverlaysRenderer {
                 bounds: () => ({ x: button.x, y: button.y, width: button.w, height: button.h })
             });
         }
+        this.input.registerElement('settings_confirm_yes', {
+            bounds: () => ({ x: this._confirmBtnX || 0, y: this._confirmBtnY || 0, width: 120, height: 35 })
+        });
+        this.input.registerElement('settings_confirm_no', {
+            bounds: () => ({ x: (this._confirmBtnX || 0) + 140, y: this._confirmBtnY || 0, width: 120, height: 35 })
+        });
         this.game.settingsButtonsRegistered = true;
     }
 
     unregisterSettingsButtons() {
-        for (const id of ['settings_speed', 'settings_profile', 'settings_quit', 'settings_close']) {
+        for (const id of ['settings_speed', 'settings_profile', 'settings_quit', 'settings_close', 'settings_confirm_yes', 'settings_confirm_no']) {
             this.input.removeElement(id);
         }
         this.game.settingsButtonsRegistered = false;
@@ -75,7 +81,7 @@ class HotpotGameOverlaysRenderer {
         this.game.settingsButtons = [];
 
         const drawButton = (button) => {
-            button.hovered = this.input.isElementHovered(button.id);
+            button.hovered = !this.game.settingsConfirmOpen && this.input.isElementHovered(button.id);
             this.gameCtx.fillStyle = button.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
             this.gameCtx.fillRect(button.x, button.y, button.w, button.h);
             this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
@@ -105,6 +111,8 @@ drawProfileModal() {
             );
 
             const ui = this.game.profileActionUI;
+            ui.setThemeOverride(Object.entries(HOTPOT.COLORS.PROFILE).map(([k, v]) => ({ [k]: v })));
+
             const t = ui.theme;
             const overlays = this;
 
@@ -121,7 +129,7 @@ drawProfileModal() {
                 avatarY: modalY + 52,
                 avatarW: contentW,
                 hintX: modalX + contentX,
-                hintY: modalY + 102,
+                hintY: modalY + 112,
                 hintW: contentW,
                 closeX: modalX + contentX,
                 closeY: modalY + modalH - pad - 46,
@@ -131,12 +139,12 @@ drawProfileModal() {
                 scrollW: contentW - 20 - 8
             };
 
-    // Panel — centered on screen
+       // Panel — centered on screen
             const panel = new ActionUIPanel({
                 x: modalX, y: modalY, width: modalW, height: modalH,
-                title: 'Profile', shadow: true, layer: 'gui'
+                title: 'Profile', shadow: true, fill: HOTPOT.COLORS.PROFILE.colorSurface, layer: 'gui'
             });
-            // Don't register with UI — draw manually to control z-order
+            panel._ui = ui;
 
             // Current avatar — large centered emoji
             const np = this.game.renderer.table.nameplate;
@@ -276,7 +284,7 @@ drawProfileModal() {
             this._profileCloseBtn._hovered = this.game.input.isElementHovered(this._profileCloseBtn.id, "gui");
         }
 
-        ui.update(0);
+        ui.update(1/60);
         scroller.update(totalItems, 0);
         scroller.refreshItems(this._profileEmojiItems, "gui");
 
@@ -295,7 +303,6 @@ drawProfileModal() {
             }
         }
 
-        // Draw panel first, then scroll area on top
         panel.draw(this.guiCtx);
         const drawCtx = this.guiCtx;
         scroller.draw(this._profileEmojiItems, (emojiItem, index, screenY) => {
@@ -339,14 +346,17 @@ drawProfileModal() {
         const totalW = btnW * 2 + spacing;
         const startX = HOTPOT.WIDTH / 2 - totalW / 2;
 
-        this.game.settingsConfirmButtons = [];
+    this.game.settingsConfirmButtons = [];
+
+        this._confirmBtnX = startX;
+        this._confirmBtnY = btnY;
 
         const yesBtn = { x: startX, y: btnY, w: btnW, h: btnH, hovered: false, action: 'confirmYes' };
         yesBtn.hovered = this.input.isElementHovered('settings_confirm_yes');
-        this.gameCtx.fillStyle = yesBtn.hovered ? '#a00000' : '#444';
+        this.gameCtx.fillStyle = yesBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
         this.gameCtx.fillRect(yesBtn.x, yesBtn.y, btnW, btnH);
-        this.gameCtx.strokeStyle = '#fff';
-        this.gameCtx.lineWidth = 1;
+        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.lineWidth = 2;
         this.gameCtx.strokeRect(yesBtn.x, yesBtn.y, btnW, btnH);
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 13px Arial';
@@ -355,10 +365,10 @@ drawProfileModal() {
 
         const noBtn = { x: startX + btnW + spacing, y: btnY, w: btnW, h: btnH, hovered: false, action: 'confirmNo' };
         noBtn.hovered = this.input.isElementHovered('settings_confirm_no');
-        this.gameCtx.fillStyle = noBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.fillStyle = noBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
         this.gameCtx.fillRect(noBtn.x, noBtn.y, btnW, btnH);
-        this.gameCtx.strokeStyle = '#fff';
-        this.gameCtx.lineWidth = 1;
+        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.gameCtx.lineWidth = 2;
         this.gameCtx.strokeRect(noBtn.x, noBtn.y, btnW, btnH);
         this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
         this.gameCtx.font = 'bold 13px Arial';

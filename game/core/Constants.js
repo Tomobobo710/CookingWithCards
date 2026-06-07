@@ -37,7 +37,25 @@ const HOTPOT = {
         WIN_BUTTON_HOVER: '#388e3c',
         DEBUG_BG: 'rgba(0,0,0,0.7)',
         DEBUG_TEXT: '#00ff00',
-        GLOW: '#ffd700'
+        GLOW: '#ffd700',
+
+        PROFILE: {
+            colorBackground: '#1a0f0a',
+            colorSurface: '#28140a',
+            colorSurfaceRaised: '#3c1e0f',
+            colorSurfaceOverlay: '#2a150b',
+            colorPrimary: '#8b4513',
+            colorPrimaryHover: '#a0522d',
+            colorPrimaryText: '#f5deb3',
+            colorText: '#f5deb3',
+            colorTextMuted: '#c4a882',
+            colorBorder: '#8b4513',
+            colorGhostBg: 'rgba(139, 69, 19, 0.15)',
+            colorGhostBorder: 'rgba(139, 69, 19, 0.4)',
+            colorDanger: '#8b0000',
+            colorShadow: '#000000',
+            colorTextInverse: '#1a0f0a'
+        }
     },
 
     CARD_SCALE: 0.75,
@@ -64,5 +82,5 @@ const HOTPOT = {
         2: { name: 'Medium', move: 0.10, rotate: 0.10, scale: 0.10, flip: 0.07,  botDelay: 60,  thinkExtra: 120, msgDuration: 5 },
         3: { name: 'Fast',   move: 0.20, rotate: 0.20, scale: 0.20, flip: 0.14,  botDelay: 30,  thinkExtra: 60,  msgDuration: 3 },
         4: { name: 'Ultra',  move: 0.50, rotate: 0.50, scale: 0.50, flip: 0.35,  botDelay: 10,  thinkExtra: 0,   msgDuration: 1 }
-    }
+    },
 };
