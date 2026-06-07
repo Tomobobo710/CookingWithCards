@@ -298,6 +298,9 @@ drawProfileModal() {
                 if (emoji && np) {
                     np.setLocalAvatar(emoji);
                     localStorage.setItem('hotpot_avatar', emoji);
+                    if (this.game.networkSession) {
+                        this.game.networkSession.sendAvatarChange(emoji);
+                    }
                 }
                 break;
             }

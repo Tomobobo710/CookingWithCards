@@ -336,6 +336,11 @@ _getAvatar(player, isLocal) {
             return emoji;
         }
         if (!player.isHuman) {
+            // Prefer synced avatar from host (player.avatar); fall back to locally generated
+            if (player.avatar && NAMEPLATE_EMOJIS.bot.includes(player.avatar)) {
+                player._avatar = player.avatar; // keep _avatar in sync so local renders stay consistent
+                return player._avatar;
+            }
             if (!player._avatar) {
                 const idx = Math.floor(Math.random() * NAMEPLATE_EMOJIS.bot.length);
                 player._avatar = NAMEPLATE_EMOJIS.bot[idx];
@@ -343,8 +348,11 @@ _getAvatar(player, isLocal) {
             return player._avatar;
         }
         // Remote human players
-        const idx = (player.id || 0) % NAMEPLATE_EMOJIS.human.length;
-        return NAMEPLATE_EMOJIS.human[idx];
+        if (player.avatar && NAMEPLATE_EMOJIS.human.includes(player.avatar)) {
+            return player.avatar;
+        }
+        // No avatar known yet — show placeholder until sync arrives
+        return '❓';
     }
 
     setLocalAvatar(emoji) {

@@ -76,6 +76,13 @@ class HotpotNetworkSession {
             }
         });
 
+        // Listen for avatar change requests (guest → host)
+        this.game.gui.registerMessageHandler("avatarChange", (message) => {
+            if (this.isHost) {
+                this.handleAvatarChange(message);
+            }
+        });
+
           // Listen for disconnections (only host processes this)
         this.networkManager.on("userLeft", (user) => {
             if (this.isHost) {
@@ -94,12 +101,12 @@ class HotpotNetworkSession {
             this.handleHostLeft(message);
         });
 
-       // Create local player (player 0 = human)
-        this.localPlayer = this.game.state.players[0];
+       // Create local player reference (will be assigned to correct slot by assignPlayerSlots)
+        this.localPlayer = null;
         const myUsername = this.game.gui.getUsername();
-        this.localPlayer.username = myUsername;
-        this.localPlayer.name = myUsername;
-        this.localPlayer.isLocal = true;
+        this.localPlayerUsername = myUsername;
+        const savedAvatar = typeof localStorage !== 'undefined' ? localStorage.getItem('hotpot_avatar') : null;
+        this.localPlayerSavedAvatar = savedAvatar;
 
         // Create remote player placeholders (up to 3 remote players)
         this.remotePlayers = [];
@@ -119,11 +126,9 @@ class HotpotNetworkSession {
         }
 
         // Replace bot players with remote placeholders
-        this.game.state.players[0] = this.localPlayer;
-        this.localPlayer.tablePosition = positions[0];
-        for (let i = 0; i < this.remotePlayers.length; i++) {
-            this.game.state.players[i + 1] = this.remotePlayers[i];
-        }
+        this.game.state.players[0] = this.remotePlayers[0];
+        this.game.state.players[1] = this.remotePlayers[1];
+        this.game.state.players[2] = this.remotePlayers[2];
 
         // Apply medium speed for online play
         this.game.currentSpeed = 2;
@@ -136,6 +141,16 @@ class HotpotNetworkSession {
 
         // Assign player slots from connected users (both host and guest)
         this.assignPlayerSlots();
+
+        // Set localPlayer reference after slot assignment
+        if (this.localPlayerUsername) {
+            this.localPlayer = this.game.state.players.find(p => p.username === this.localPlayerUsername && p.username !== '');
+        }
+
+        // Set local player's avatar from localStorage
+        if (this.localPlayer && this.localPlayerSavedAvatar) {
+            this.localPlayer.avatar = this.localPlayerSavedAvatar;
+        }
 
         // Register sync sources
         this.registerSyncSources();
@@ -259,28 +274,74 @@ class HotpotNetworkSession {
             })
         });
 
-       // Per-player sync sources — only the host broadcasts player state
+       // Per-player sync sources — only the host broadcasts full player state
         if (this.isHost) {
             for (let i = 0; i < this.game.state.players.length; i++) {
                 const player = this.game.state.players[i];
                 const sourceId = "player_" + i;
 
                 this.syncSystem.register(sourceId, {
-                    getFields: () => ({
-                        playerNumber: player.playerNumber ?? player.id,
-                        isHuman: player.isHuman,
-                        hand: player.hand.map(c => ({ category: c.category, ingredient: c.ingredient })),
-                        drawnCard: player.drawnCard ? { category: player.drawnCard.category, ingredient: player.drawnCard.ingredient, drawSourcePlayer: player.drawSourcePlayer } : null,
-                        discardPile: player.discardPile.map(c => ({ category: c.category, ingredient: c.ingredient })),
-                        lastDiscard: player.lastDiscard || null,
-                        sets: player.sets.length,
-                        won: player.won,
-                        score: player.score,
-                        turnCount: player.turnCount,
-                        username: player.username || ''
-                    })
+                    getFields: () => {
+                        let avatar = null;
+                        if (player.isHuman) {
+                            if (player.avatar && NAMEPLATE_EMOJIS.human.includes(player.avatar)) {
+                                // Player has an explicitly-set avatar — use it
+                                avatar = player.avatar;
+                            } else if (i === 0 && typeof localStorage !== 'undefined') {
+                                // Host's own slot (i===0): fall back to localStorage, same source as NamePlateRenderer
+                                const saved = localStorage.getItem('hotpot_avatar');
+                                if (saved && NAMEPLATE_EMOJIS.human.includes(saved)) {
+                                    avatar = saved;
+                                    player.avatar = saved; // cache so future frames skip localStorage lookup
+                                }
+                            }
+                            if (!avatar) {
+                                // No avatar known yet — show placeholder until sync arrives
+                                avatar = '❓';
+                            }
+                        } else {
+                            // Bot: generate _avatar eagerly if not yet assigned
+                            if (!player._avatar) {
+                                const idx = Math.floor(Math.random() * NAMEPLATE_EMOJIS.bot.length);
+                                player._avatar = NAMEPLATE_EMOJIS.bot[idx];
+                            }
+                            avatar = player._avatar;
+                        }
+                        return {
+                            playerNumber: player.playerNumber ?? player.id,
+                            isHuman: player.isHuman,
+                            hand: player.hand.map(c => ({ category: c.category, ingredient: c.ingredient })),
+                            drawnCard: player.drawnCard ? { category: player.drawnCard.category, ingredient: player.drawnCard.ingredient, drawSourcePlayer: player.drawSourcePlayer } : null,
+                            discardPile: player.discardPile.map(c => ({ category: c.category, ingredient: c.ingredient })),
+                            lastDiscard: player.lastDiscard || null,
+                            sets: player.sets.length,
+                            won: player.won,
+                            score: player.score,
+                            turnCount: player.turnCount,
+                            username: player.username || '',
+                            avatar: avatar
+                        };
+                    }
                 });
             }
+        } else {
+            // Guest: register a lightweight sync source so the host receives
+            // our avatar (and username for slot lookup) via the sync heartbeat.
+            this.syncSystem.register("my_player", {
+                getFields: () => {
+                    let avatar = null;
+                    if (typeof localStorage !== 'undefined') {
+                        const saved = localStorage.getItem('hotpot_avatar');
+                        if (saved && NAMEPLATE_EMOJIS.human.includes(saved)) {
+                            avatar = saved;
+                        }
+                    }
+                    return {
+                        username: this.localPlayerUsername || '',
+                        avatar: avatar
+                    };
+                }
+            });
         }
     }
 
@@ -710,10 +771,42 @@ class HotpotNetworkSession {
         }
     }
 
+    handleAvatarChange(message) {
+        const { playerIndex, emoji, username } = message;
+        if (!emoji) return;
+
+        let player = null;
+
+        // Prefer username lookup — slot indices can diverge between clients
+        if (username) {
+            player = this.game.state.players.find(p => p.username === username && p.username !== '');
+        }
+
+        // Fall back to playerIndex if no username or username not matched yet
+        if (!player && typeof playerIndex === 'number') {
+            player = this.game.state.players[playerIndex];
+        }
+
+        if (!player) return;
+        player.avatar = emoji;
+    }
+
 
     updateRemotePlayerStates() {
         if (this.isHost) {
             this.assignPlayerSlots();
+
+            // Read guest's avatar from their 'my_player' sync source
+            const guestPlayerData = this.syncSystem ? this.syncSystem.getRemote("my_player") : null;
+            if (guestPlayerData && guestPlayerData.username && guestPlayerData.avatar) {
+                const guestPlayer = this.game.state.players.find(
+                    p => p.username === guestPlayerData.username && p.username !== ''
+                );
+                if (guestPlayer && guestPlayer.avatar !== guestPlayerData.avatar) {
+                    guestPlayer.avatar = guestPlayerData.avatar;
+                }
+            }
+
             return;
         }
 
@@ -760,6 +853,11 @@ class HotpotNetworkSession {
             if (remoteData.username) {
                 localPlayer.username = remoteData.username;
                 localPlayer.name = remoteData.username;
+            }
+
+            // Sync avatar
+            if (remoteData.avatar) {
+                localPlayer.avatar = remoteData.avatar;
             }
 
             // Sync isHuman from host
@@ -1060,7 +1158,24 @@ class HotpotNetworkSession {
         }
     }
 
-    cleanup() {
+    sendAvatarChange(emoji) {
+        if (!this.networkManager || !this.networkManager.isInRoom()) return;
+
+        if (this.isHost) {
+            // Host's send() doesn't loop back to self — apply the avatar directly
+            // to the local player slot so the sync source picks it up immediately.
+            this.handleAvatarChange({ playerIndex: this.localPlayerIndex, username: this.localPlayerUsername, emoji });
+        }
+
+        this.networkManager.send({
+            type: "avatarChange",
+            playerIndex: this.localPlayerIndex,
+            username: this.localPlayerUsername,
+            emoji: emoji
+        });
+    }
+
+cleanup() {
         if (this.game && this.game.gui) {
             this.game.gui.unregisterMessageHandler("playerAction");
         }
