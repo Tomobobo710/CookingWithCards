@@ -76,14 +76,7 @@ class HotpotNetworkSession {
             }
         });
 
-        // Listen for avatar change requests (guest → host)
-        this.game.gui.registerMessageHandler("avatarChange", (message) => {
-            if (this.isHost) {
-                this.handleAvatarChange(message);
-            }
-        });
-
-          // Listen for disconnections (only host processes this)
+            // Listen for disconnections (only host processes this)
         this.networkManager.on("userLeft", (user) => {
             if (this.isHost) {
                 this.handleOpponentLeft(user);
@@ -771,27 +764,6 @@ class HotpotNetworkSession {
         }
     }
 
-    handleAvatarChange(message) {
-        const { playerIndex, emoji, username } = message;
-        if (!emoji) return;
-
-        let player = null;
-
-        // Prefer username lookup — slot indices can diverge between clients
-        if (username) {
-            player = this.game.state.players.find(p => p.username === username && p.username !== '');
-        }
-
-        // Fall back to playerIndex if no username or username not matched yet
-        if (!player && typeof playerIndex === 'number') {
-            player = this.game.state.players[playerIndex];
-        }
-
-        if (!player) return;
-        player.avatar = emoji;
-    }
-
-
     updateRemotePlayerStates() {
         if (this.isHost) {
             this.assignPlayerSlots();
@@ -1158,24 +1130,7 @@ class HotpotNetworkSession {
         }
     }
 
-    sendAvatarChange(emoji) {
-        if (!this.networkManager || !this.networkManager.isInRoom()) return;
-
-        if (this.isHost) {
-            // Host's send() doesn't loop back to self — apply the avatar directly
-            // to the local player slot so the sync source picks it up immediately.
-            this.handleAvatarChange({ playerIndex: this.localPlayerIndex, username: this.localPlayerUsername, emoji });
-        }
-
-        this.networkManager.send({
-            type: "avatarChange",
-            playerIndex: this.localPlayerIndex,
-            username: this.localPlayerUsername,
-            emoji: emoji
-        });
-    }
-
-cleanup() {
+ cleanup() {
         if (this.game && this.game.gui) {
             this.game.gui.unregisterMessageHandler("playerAction");
         }
