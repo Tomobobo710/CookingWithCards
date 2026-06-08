@@ -14,6 +14,10 @@ class HotpotGameInputController {
             this.game.debugEnabled = !this.game.debugEnabled;
         }
 
+        if (this.input.isKeyJustPressed('Action3')) {
+            this.toggleLayout();
+        }
+
      if (this.game.settingsOpen) {
             if (this.input.isLeftMouseButtonJustPressed()) {
                 const pointer = this.input.getPointerPosition();
@@ -298,6 +302,27 @@ class HotpotGameInputController {
                     ingredient: player.drawnCard.ingredient
                 });
             }
+        }
+    }
+
+    toggleLayout() {
+        const isLandscape = HOTPOT.WIDTH > HOTPOT.HEIGHT;
+        HOTPOT.WIDTH = isLandscape ? 720 : 1280;
+        HOTPOT.HEIGHT = isLandscape ? 1280 : 720;
+        HOTPOT.LAYOUT = isLandscape ? HOTPOT.LAYOUTS.portrait : HOTPOT.LAYOUTS.landscape;
+
+        for (const canvas of [this.game.gameCanvas, this.game.guiCanvas, this.game.debugCanvas]) {
+            canvas.width = HOTPOT.WIDTH;
+            canvas.height = HOTPOT.HEIGHT;
+        }
+
+        const container = this.game.gameCanvas.parentElement;
+        const cw = container.clientWidth;
+        const ch = container.clientHeight;
+        const scale = Math.min(cw / HOTPOT.WIDTH, ch / HOTPOT.HEIGHT);
+        for (const canvas of [this.game.gameCanvas, this.game.guiCanvas, this.game.debugCanvas]) {
+            canvas.style.width = `${HOTPOT.WIDTH * scale}px`;
+            canvas.style.height = `${HOTPOT.HEIGHT * scale}px`;
         }
     }
 }
