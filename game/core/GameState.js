@@ -25,7 +25,7 @@ class GameState {
         for (const [catName, catData] of Object.entries(HOTPOT.CATEGORIES)) {
             for (const ingredient of Object.keys(catData.ingredients)) {
                 for (let copy = 0; copy < HOTPOT.GAME.COPIES_PER_INGREDIENT; copy++) {
-                    const card = new Card(catName, ingredient, null, HOTPOT.CARD_SCALE);
+                    const card = new Card(catName, ingredient, null, HOTPOT.LAYOUT.CARD_SCALE);
                     card.x = deckRect.x;
                     card.y = deckRect.y;
                     card.targetX = deckRect.x;

@@ -119,9 +119,11 @@ class HotpotNetworkSession {
         }
 
         // Replace bot players with remote placeholders
-        this.game.state.players[0] = this.remotePlayers[0];
-        this.game.state.players[1] = this.remotePlayers[1];
-        this.game.state.players[2] = this.remotePlayers[2];
+        // Keep players[0] (host) intact — it already has tablePosition='S' from setupPlayers.
+        // The remotePlayers were created with positions[i+1] so they occupy seats W,N,E.
+        this.game.state.players[1] = this.remotePlayers[0];
+        this.game.state.players[2] = this.remotePlayers[1];
+        this.game.state.players[3] = this.remotePlayers[2];
 
         // Apply medium speed for online play
         this.game.currentSpeed = 2;
@@ -789,8 +791,8 @@ class HotpotNetworkSession {
         const cx = HOTPOT.WIDTH / 2;
         const cy = HOTPOT.HEIGHT / 2;
         const gap = 50;
-        const hw = HOTPOT.UI.CARD_WIDTH / 2;
-        const hh = HOTPOT.UI.CARD_HEIGHT / 2;
+        const hw = HOTPOT.LAYOUT.CARD_WIDTH / 2;
+        const hh = HOTPOT.LAYOUT.CARD_HEIGHT / 2;
         const distV = hh + gap;
         const distH = hw + gap / 2 + 12.5;
         const seatMap = { 0: { x: cx - hw, y: cy + distV - hh }, 1: { x: cx - distH - hw, y: cy - hh }, 2: { x: cx - hw, y: cy - distV - hh }, 3: { x: cx + distH - hw, y: cy - hh } };

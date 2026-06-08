@@ -33,7 +33,7 @@ class HotpotWaitingMenusInputManager {
 
         if (this.input.isLeftMouseButtonJustPressed()) {
             const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 380, spacing = 75;
+            const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.WAITING_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
             for (let i = 0; i < menu.buttons.length; i++) {
                 const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
                 const y = startY + i * spacing;
@@ -75,7 +75,7 @@ class HotpotWaitingMenusInputManager {
 
         if (this.input.isLeftMouseButtonJustPressed()) {
             const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 300, spacing = 75;
+            const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.WAITCANCEL_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
             for (let i = 0; i < menu.buttons.length; i++) {
                 const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
                 const y = startY + i * spacing;
@@ -117,7 +117,7 @@ class HotpotWaitingMenusInputManager {
 
         if (this.input.isLeftMouseButtonJustPressed()) {
             const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 380, spacing = 75;
+            const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.WAITHOST_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
             for (let i = 0; i < menu.buttons.length; i++) {
                 const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
                 const y = startY + i * spacing;
@@ -159,7 +159,7 @@ class HotpotWaitingMenusInputManager {
 
         if (this.input.isLeftMouseButtonJustPressed()) {
             const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 300, spacing = 75;
+            const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.DISCONNECT_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
             for (let i = 0; i < menu.buttons.length; i++) {
                 const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
                 const y = startY + i * spacing;
@@ -221,7 +221,7 @@ class HotpotWaitingMenusInputManager {
 
         if (this.input.isLeftMouseButtonJustPressed()) {
             const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 380, spacing = 75;
+            const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.REMATCH_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
             for (let i = 0; i < menu.buttons.length; i++) {
                 const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
                 const y = startY + i * spacing;
@@ -341,7 +341,7 @@ class HotpotWaitingMenusInputManager {
 
     registerWaitingMenuButtons() {
         if (this.game.waitingMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 380, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.WAITING_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
         this.game.waitingMenu.buttons.forEach((button, index) => {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + index * spacing;
@@ -354,7 +354,7 @@ class HotpotWaitingMenusInputManager {
 
     registerWaitingCanceledMenuButtons() {
         if (this.game.waitingCanceledMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 300, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.WAITCANCEL_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
         this.game.waitingCanceledMenu.buttons.forEach((button, index) => {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + index * spacing;
@@ -367,7 +367,7 @@ class HotpotWaitingMenusInputManager {
 
     registerWaitingForHostMenuButtons() {
         if (this.game.waitingForHostMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 380, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.WAITHOST_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
         this.game.waitingForHostMenu.buttons.forEach((button, index) => {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + index * spacing;
@@ -380,7 +380,7 @@ class HotpotWaitingMenusInputManager {
 
     registerOpponentDisconnectedMenuButtons() {
         if (this.game.opponentDisconnectedMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 300, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.DISCONNECT_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
         this.game.opponentDisconnectedMenu.buttons.forEach((button, index) => {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + index * spacing;
@@ -393,7 +393,7 @@ class HotpotWaitingMenusInputManager {
 
     registerRoomShutDownMenuButtons() {
         if (this.game.roomShutDownMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 340;
+        const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.SHUTDOWN_BUTTON_START_Y;
         const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
         const y = startY;
         this.input.registerElement("hotpot_roomshutdown_button_0", {
@@ -404,7 +404,7 @@ class HotpotWaitingMenusInputManager {
 
     registerRematchPendingMenuButtons() {
         if (this.game.rematchPendingMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 380, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.REMATCH_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.BUTTON_SPACING;
         this.game.rematchPendingMenu.buttons.forEach((button, index) => {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + index * spacing;

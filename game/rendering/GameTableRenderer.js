@@ -1,16 +1,14 @@
-// game/GameTableRenderer.js
+// game/rendering/GameTableRenderer.js
 // Renders the in-table game scene: deck, discards, hands, turn info, game-over overlay.
-// Also owns the per-frame card update and the per-frame glow highlighting.
 
 class HotpotGameTableRenderer {
     constructor(game) {
         this.game = game;
-        this.gameCtx = game.gameCtx;
+        this.ctx = game.gameCtx;
         this.input = game.input;
         this.nameplate = new NamePlateRenderer(game);
     }
 
-    // ---------- Update helpers ----------
     updateCards() {
         for (const player of this.game.state.players) {
             for (const card of player.hand) {
@@ -33,10 +31,8 @@ class HotpotGameTableRenderer {
         }
     }
 
-    // ---------- In-table glow highlighting ----------
     setGlowingForLocalPlayer() {
         if (this.game.gameState !== 'playing' && this.game.gameState !== 'gameOver' && this.game.gameState !== 'onlineMultiplayer') {
-            // Clear all glows during menus
             for (const player of this.game.state.players) {
                 for (const card of player.hand) card.glowing = false;
                 if (player.drawnCard) player.drawnCard.glowing = false;
@@ -45,7 +41,6 @@ class HotpotGameTableRenderer {
             return;
         }
 
-        // Clear all glows first
         for (const player of this.game.state.players) {
             for (const card of player.hand) card.glowing = false;
             for (const card of player.discardPile) card.glowing = false;
@@ -55,7 +50,6 @@ class HotpotGameTableRenderer {
 
         const localPlayer = this.game.flow.findLocalPlayer();
 
-        // Determine if it's local player's turn
         let isLocalTurn = false;
         if (this.game.networkSession && this.game.networkSession.localPlayerIndex !== undefined) {
             isLocalTurn = this.game.networkSession.gameState.currentPlayerIndex === this.game.networkSession.localPlayerIndex;
@@ -65,7 +59,6 @@ class HotpotGameTableRenderer {
 
         if (!isLocalTurn) return;
 
-        // Draw phase: discard pile cards are clickable
         if (this.game.turnPhase === 'draw') {
             for (const player of this.game.state.players) {
                 if (player === localPlayer) continue;
@@ -76,7 +69,6 @@ class HotpotGameTableRenderer {
             }
         }
 
-        // Discard phase: hand cards and drawn card are clickable
         if (this.game.turnPhase === 'discard') {
             for (const card of localPlayer.hand) {
                 card.glowing = true;
@@ -87,7 +79,6 @@ class HotpotGameTableRenderer {
         }
     }
 
-    // ---------- Game table render ----------
     drawGameTable() {
         this.setGlowingForLocalPlayer();
 
@@ -97,29 +88,22 @@ class HotpotGameTableRenderer {
         this.drawDiscardPiles();
         this.drawSettingsButton();
 
-        // Find local player index (the one controlling this client)
         let localPlayerIndex = 0;
         if (this.game.networkSession) {
             for (let i = 0; i < this.game.state.players.length; i++) {
                 if (this.game.state.players[i].isLocal) { localPlayerIndex = i; break; }
             }
         } else {
-            // Single player: player 0 is human
             for (let i = 0; i < this.game.state.players.length; i++) {
                 if (this.game.state.players[i].isHuman) { localPlayerIndex = i; break; }
             }
         }
 
-        // Render local player at bottom, remote players at other 3 positions
         const localPlayer = this.game.state.players[localPlayerIndex];
         this.drawLocalPlayerHand(localPlayer);
 
-        // Remote players: position them around the table
-        // Fixed visual slots: left(W)=1, top(N)=2, right(E)=3
-        // Players fill slots in turn order, starting from the slot after local player (clockwise)
-        const visualSlots = [1, 2, 3]; // left, top, right
+        const visualSlots = [1, 2, 3];
         let slotIdx = 0;
-        // Start filling from the player whose index is next after localPlayerIndex (clockwise)
         for (let offset = 1; offset < this.game.state.players.length; offset++) {
             const remoteIdx = (localPlayerIndex + offset) % this.game.state.players.length;
             if (remoteIdx >= this.game.state.players.length) continue;
@@ -129,7 +113,6 @@ class HotpotGameTableRenderer {
             slotIdx++;
         }
 
-        // Store player positions for nameplate overlay (drawn last)
         this._nameplatePositions = [];
         slotIdx = 0;
         for (let offset = 1; offset < this.game.state.players.length; offset++) {
@@ -139,7 +122,6 @@ class HotpotGameTableRenderer {
             slotIdx++;
         }
 
-        // Draw nameplates on top of everything
         this.drawNameplateOverlay();
 
         if (this.game.gameState === 'gameOver') {
@@ -161,28 +143,27 @@ class HotpotGameTableRenderer {
             this.drawMessage();
         }
 
-        // Draw countdown overlay for online multiplayer
         if (this.game.networkSession && this.game.countdown) {
             const cd = this.game.countdown;
             if (cd.active && cd.phase === 'countdown' && cd.countdownNumber) {
-                this.gameCtx.fillStyle = 'rgba(0,0,0,0.5)';
-                this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
-                this.gameCtx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
-                this.gameCtx.font = 'bold 80px Arial';
-                this.gameCtx.textAlign = 'center';
-                this.gameCtx.fillText(cd.countdownNumber, HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2 + 25);
+                this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                this.ctx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+                this.ctx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
+                this.ctx.font = 'bold 80px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(cd.countdownNumber, HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2 + 25);
             } else if (cd.active && cd.phase === 'go') {
-                this.gameCtx.fillStyle = 'rgba(0,0,0,0.5)';
-                this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
-                this.gameCtx.fillStyle = '#90ee90';
-                this.gameCtx.font = 'bold 60px Arial';
-                this.gameCtx.textAlign = 'center';
-                this.gameCtx.fillText('LET\'S EAT!', HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2 + 20);
+                this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                this.ctx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+                this.ctx.fillStyle = '#90ee90';
+                this.ctx.font = 'bold 60px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('LET\'S EAT!', HOTPOT.WIDTH / 2, HOTPOT.HEIGHT / 2 + 20);
             }
         }
     }
 
-   drawNameplateOverlay() {
+    drawNameplateOverlay() {
         if (!this._nameplatePositions) return;
         for (const { player, index } of this._nameplatePositions) {
             const w = this.nameplate.computeWidth(player);
@@ -200,7 +181,6 @@ class HotpotGameTableRenderer {
             this.nameplate.draw(player, index, plateX, plateY);
         }
 
-        // Local player nameplate at bottom center
         const localPlayer = this.game.flow.findLocalPlayer();
         if (localPlayer) {
             const displayName = localPlayer.isLocal ? (localPlayer.name === 'You' ? 'You' : localPlayer.name) : localPlayer.name;
@@ -229,20 +209,20 @@ class HotpotGameTableRenderer {
         }
         const isClickable = isMyTurn && this.game.turnPhase === 'draw' && deckLength > 0;
 
-        this.gameCtx.fillStyle = isClickable ? '#a00000' : HOTPOT.COLORS.DECK;
-        this.gameCtx.fillRect(rect.x, rect.y, rect.w, rect.h);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.gameCtx.lineWidth = 2;
-        this.gameCtx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+        this.ctx.fillStyle = isClickable ? '#a00000' : HOTPOT.COLORS.DECK;
+        this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
 
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = '26px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText('🀄', rect.x + rect.w / 2, rect.y + rect.h / 2 + 8);
+        this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.ctx.font = '26px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('🀄', rect.x + rect.w / 2, rect.y + rect.h / 2 + 8);
 
         if (isClickable && this.game.state.deck.length > 0) {
-            this.gameCtx.fillStyle = '#ff6666';
-            this.gameCtx.font = '11px Arial';
+            this.ctx.fillStyle = '#ff6666';
+            this.ctx.font = '11px Arial';
         }
     }
 
@@ -264,19 +244,19 @@ class HotpotGameTableRenderer {
             if (p.discardPile.length > 0) {
                 const topCard = p.discardPile[p.discardPile.length - 1];
                 topCard.moveTo(rect.x, rect.y);
-                topCard.scaleTo(0.75);
-                topCard.draw(this.gameCtx);
+                topCard.scaleTo(HOTPOT.LAYOUT.CARD_SCALE);
+                topCard.draw(this.ctx);
             } else {
-                this.gameCtx.fillStyle = 'rgba(80,40,20,0.6)';
-                this.gameCtx.fillRect(rect.x, rect.y, rect.w, rect.h);
-                this.gameCtx.strokeStyle = '#555';
-                this.gameCtx.lineWidth = 2;
-                this.gameCtx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+                this.ctx.fillStyle = 'rgba(80,40,20,0.6)';
+                this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+                this.ctx.strokeStyle = '#555';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
             }
 
             if (canClick) {
-                this.gameCtx.fillStyle = '#ffcc00';
-                this.gameCtx.font = '10px Arial';
+                this.ctx.fillStyle = '#ffcc00';
+                this.ctx.font = '10px Arial';
             }
         }
     }
@@ -287,15 +267,15 @@ class HotpotGameTableRenderer {
         const pointer = this.input.getPointerPosition();
         btn.hovered = pointer.x >= btn.x && pointer.x <= btn.x + btn.w && pointer.y >= btn.y && pointer.y <= btn.y + btn.h;
 
-        this.gameCtx.fillStyle = btn.hovered ? HOTPOT.COLORS.HIGHLIGHT : 'rgba(60,30,15,0.8)';
-        this.gameCtx.fillRect(btn.x, btn.y, btn.w, btn.h);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.gameCtx.lineWidth = 1;
-        this.gameCtx.strokeRect(btn.x, btn.y, btn.w, btn.h);
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 12px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText('⚙ Settings', btn.x + btn.w / 2, btn.y + btn.h / 2 + 4);
+        this.ctx.fillStyle = btn.hovered ? HOTPOT.COLORS.HIGHLIGHT : 'rgba(60,30,15,0.8)';
+        this.ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
+        this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
+        this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.ctx.font = 'bold 12px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('\u2699 Settings', btn.x + btn.w / 2, btn.y + btn.h / 2 + 4);
 
         if (this.input.isLeftMouseButtonJustPressed() && btn.hovered) {
             this.game.openSettingsModal();
@@ -308,9 +288,9 @@ class HotpotGameTableRenderer {
         for (let i = 0; i < player.hand.length; i++) {
             const card = player.hand[i];
             const rect = handRects[i];
-            card.scaleTo(HOTPOT.CARD_SCALE);
+            card.scaleTo(HOTPOT.LAYOUT.CARD_SCALE);
             card.moveTo(rect.x, rect.y);
-            card.draw(this.gameCtx);
+            card.draw(this.ctx);
         }
 
         if (handRects.length > 0) {
@@ -320,36 +300,36 @@ class HotpotGameTableRenderer {
                 const card = i < player.hand.length ? player.hand[i] : null;
                 if (!card || card.category !== curCat) {
                     const sx = handRects[catStart].x;
-                    const ex = handRects[i - 1].x + HOTPOT.UI.CARD_WIDTH;
-                    this.gameCtx.fillStyle = HOTPOT.CATEGORIES[curCat].color;
-                    this.gameCtx.font = 'bold 9px Arial';
-                    this.gameCtx.textAlign = 'center';
-                    this.gameCtx.textBaseline = 'bottom';
-                    this.gameCtx.fillText(HOTPOT.CATEGORIES[curCat].icon + ' ' + curCat, (sx + ex) / 2, HOTPOT.UI.HAND_Y - 4);
+                    const ex = handRects[i - 1].x + HOTPOT.LAYOUT.CARD_WIDTH;
+                    this.ctx.fillStyle = HOTPOT.CATEGORIES[curCat].color;
+                    this.ctx.font = 'bold 9px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'bottom';
+                    this.ctx.fillText(HOTPOT.CATEGORIES[curCat].icon + ' ' + curCat, (sx + ex) / 2, HOTPOT.LAYOUT.HAND_Y - 4);
                     if (i < player.hand.length) { catStart = i; curCat = card.category; }
                 }
             }
-            this.gameCtx.textBaseline = 'alphabetic';
+            this.ctx.textBaseline = 'alphabetic';
         }
 
         if (player.drawnCard) {
             const drawnRect = this.game.layout.getDrawnCardRect();
             const card = player.drawnCard;
             card.moveTo(drawnRect.x, drawnRect.y);
-            card.scaleTo(0.75);
-            card.draw(this.gameCtx);
+            card.scaleTo(HOTPOT.LAYOUT.CARD_SCALE);
+            card.draw(this.ctx);
 
-            this.gameCtx.fillStyle = '#fff';
-            this.gameCtx.font = 'bold 12px Arial';
-            this.gameCtx.textAlign = 'center';
-            this.gameCtx.fillText('DRAWN', drawnRect.x + drawnRect.w / 2, drawnRect.y - 8);
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = 'bold 12px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('DRAWN', drawnRect.x + drawnRect.w / 2, drawnRect.y - 8);
         }
 
-         if (player.sets.length > 0) {
-            this.gameCtx.fillStyle = '#90ee90';
-            this.gameCtx.font = '12px Arial';
-            this.gameCtx.textAlign = 'left';
-            this.gameCtx.fillText(`Locked sets: ${player.sets.length}`, 10, HOTPOT.UI.HAND_Y - 6);
+        if (player.sets.length > 0) {
+            this.ctx.fillStyle = '#90ee90';
+            this.ctx.font = '12px Arial';
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText(`Locked sets: ${player.sets.length}`, 10, HOTPOT.LAYOUT.HAND_Y - 6);
         }
     }
 
@@ -357,11 +337,10 @@ class HotpotGameTableRenderer {
         const cards = player.hand;
         if (cards.length === 0) return;
 
-        const cardScale = 0.5;
-        const spacing = 6;
-        const fw = 80 * cardScale;
-        const fh = 115 * cardScale;
-        const drawnCardPadding = 8;
+        const cardScale = HOTPOT.LAYOUT.OTHER_CARD_SCALE;
+        const spacing = HOTPOT.LAYOUT.OTHER_CARD_SPACING;
+        const fw = HOTPOT.LAYOUT.CARD_BASE_WIDTH * cardScale;
+        const fh = HOTPOT.LAYOUT.CARD_BASE_HEIGHT * cardScale;
         const handAngle = index === 1 ? Math.PI / 2 : (index === 2 ? Math.PI : -Math.PI / 2);
 
         for (let i = 0; i < cards.length; i++) {
@@ -379,23 +358,23 @@ class HotpotGameTableRenderer {
                 const visualH = fw;
                 const totalH = cards.length * visualH + (cards.length - 1) * spacing;
                 const startY = (HOTPOT.HEIGHT - totalH) / 2;
-                cx = fw / 2 + 12;
+                cx = fw / 2 + HOTPOT.LAYOUT.SIDE_EDGE_OFFSET;
                 cy = startY + i * (visualH + spacing) + visualH / 2;
             } else if (index === 2) {
                 const totalW = cards.length * fw + (cards.length - 1) * spacing;
                 const startX = (HOTPOT.WIDTH - totalW) / 2;
                 cx = startX + i * (fw + spacing) + fw / 2;
-                cy = fh / 2 + 10;
+                cy = fh / 2 + HOTPOT.LAYOUT.TOP_OFFSET;
             } else {
                 const visualH = fw;
                 const totalH = cards.length * visualH + (cards.length - 1) * spacing;
                 const startY = (HOTPOT.HEIGHT - totalH) / 2;
-                cx = HOTPOT.WIDTH - fw / 2 - 12;
+                cx = HOTPOT.WIDTH - fw / 2 - HOTPOT.LAYOUT.SIDE_EDGE_OFFSET;
                 cy = startY + i * (visualH + spacing) + visualH / 2;
             }
 
             card.moveTo(cx - fw / 2, cy - fh / 2);
-            card.draw(this.gameCtx);
+            card.draw(this.ctx);
         }
 
         if (player.drawnCard) {
@@ -409,18 +388,18 @@ class HotpotGameTableRenderer {
 
             let dcx, dcy;
             if (index === 1) {
-                dcx = fw / 2 + 12 + fw + 8 + fw / 2;
+                dcx = fw / 2 + HOTPOT.LAYOUT.SIDE_EDGE_OFFSET + fw + HOTPOT.LAYOUT.OTHER_DRAWN_PADDING + fw / 2;
                 dcy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * fh) / 2;
             } else if (index === 2) {
                 dcx = (HOTPOT.WIDTH - totalW) / 2 + (cards.length * fw) / 2;
-                dcy = fh / 2 + 10 + fh + 8 + fh / 2;
+                dcy = fh / 2 + HOTPOT.LAYOUT.TOP_OFFSET + fh + HOTPOT.LAYOUT.OTHER_DRAWN_PADDING + fh / 2;
             } else {
-                dcx = HOTPOT.WIDTH - fw / 2 - 12 - fw - 8 - fw / 2;
+                dcx = HOTPOT.WIDTH - fw / 2 - HOTPOT.LAYOUT.SIDE_EDGE_OFFSET - fw - HOTPOT.LAYOUT.OTHER_DRAWN_PADDING - fw / 2;
                 dcy = (HOTPOT.HEIGHT - totalH) / 2 + (cards.length * fh) / 2;
             }
             dc.moveTo(dcx - fw / 2, dcy - fh / 2);
 
-            dc.draw(this.gameCtx);
+            dc.draw(this.ctx);
         }
     }
 
@@ -435,41 +414,34 @@ class HotpotGameTableRenderer {
         }
 
         const label = isMyTurn ? 'YOUR TURN' : `${currentPlayer.name}'s TURN`;
-        this.gameCtx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
-        this.gameCtx.font = 'bold 16px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(label, HOTPOT.WIDTH / 2, this.game.msgY);
+        this.ctx.fillStyle = HOTPOT.COLORS.HIGHLIGHT;
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(label, HOTPOT.WIDTH / 2, this.game.msgY);
 
         if (isMyTurn && this.game.turnPhase === 'draw') {
-            this.gameCtx.fillStyle = '#ffcc66';
-            this.gameCtx.font = '13px Arial';
-            this.gameCtx.fillText('Click the deck to draw, or click an opponent\'s discard pile to steal', HOTPOT.WIDTH / 2, this.game.msgY + 20);
+            this.ctx.fillStyle = '#ffcc66';
+            this.ctx.font = '13px Arial';
+            this.ctx.fillText('Click the deck to draw, or click an opponent\'s discard pile to steal', HOTPOT.WIDTH / 2, this.game.msgY + 20);
         } else if (isMyTurn && this.game.turnPhase === 'discard') {
-            this.gameCtx.fillStyle = '#ffcc66';
-            this.gameCtx.font = '13px Arial';
-            this.gameCtx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, this.game.msgY + 20);
+            this.ctx.fillStyle = '#ffcc66';
+            this.ctx.font = '13px Arial';
+            this.ctx.fillText('Click any card (hand or drawn) to discard it and end your turn', HOTPOT.WIDTH / 2, this.game.msgY + 20);
         }
-
-        // TODO: implement timer — remaining = ???
-        // const remaining = 0;
-        // this.gameCtx.fillStyle = remaining <= 10 ? '#ff6b6b' : '#ffcc66';
-        // this.gameCtx.font = 'bold 14px Arial';
-        // this.gameCtx.textAlign = 'center';
-        // this.gameCtx.fillText('Time: ' + remaining + 's', HOTPOT.WIDTH / 2, this.game.msgY + 40);
 
         const localPlayer = this.game.flow.findLocalPlayer();
         if (isMyTurn && this.game.turnPhase === 'discard' && this.game.state.canWin(localPlayer)) {
             this.game.eatButton.hovered = this.input.isElementHovered('eat_button');
             const btn = this.game.eatButton;
-            this.gameCtx.fillStyle = btn.hovered ? '#43a047' : '#2e7d32';
-            this.gameCtx.fillRect(btn.x, btn.y, btn.width, btn.height);
-            this.gameCtx.strokeStyle = '#fff';
-            this.gameCtx.lineWidth = 3;
-            this.gameCtx.strokeRect(btn.x, btn.y, btn.width, btn.height);
-            this.gameCtx.fillStyle = '#fff';
-            this.gameCtx.font = 'bold 22px Arial';
-            this.gameCtx.textAlign = 'center';
-            this.gameCtx.fillText('🍜 LET\'S EAT! 🍜', btn.x + btn.width / 2, btn.y + btn.height / 2 + 8);
+            this.ctx.fillStyle = btn.hovered ? '#43a047' : '#2e7d32';
+            this.ctx.fillRect(btn.x, btn.y, btn.width, btn.height);
+            this.ctx.strokeStyle = '#fff';
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeRect(btn.x, btn.y, btn.width, btn.height);
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = 'bold 22px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('\uD83C\uDF5C LET\'S EAT! \uD83C\uDF5C', btn.x + btn.width / 2, btn.y + btn.height / 2 + 8);
         }
     }
 
@@ -477,61 +449,65 @@ class HotpotGameTableRenderer {
     }
 
     drawGameOver() {
-        this.gameCtx.fillStyle = 'rgba(0,0,0,0.75)';
-        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+        this.ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        this.ctx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
 
         const winner = this.game.state.players.find(p => p.won);
 
-        this.gameCtx.fillStyle = '#ffd700';
-        this.gameCtx.font = 'bold 42px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(`${winner ? winner.name : 'Nobody'} Wins!`, HOTPOT.WIDTH / 2, 160);
+        this.ctx.fillStyle = '#ffd700';
+        this.ctx.font = 'bold 42px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`${winner ? winner.name : 'Nobody'} Wins!`, HOTPOT.WIDTH / 2, HOTPOT.LAYOUT.GAMEOVER_TITLE_Y);
 
         if (winner) {
-            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-            this.gameCtx.font = 'bold 18px Arial';
+            this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.ctx.font = 'bold 18px Arial';
 
             const localPlayer = this.game.flow.findLocalPlayer();
-            this.gameCtx.fillText(`Your sets: ${localPlayer.sets.length}`, HOTPOT.WIDTH / 2, 210);
+            this.ctx.fillText(`Your sets: ${localPlayer.sets.length}`, HOTPOT.WIDTH / 2, HOTPOT.LAYOUT.GAMEOVER_WINNER_SCORE_Y);
 
-            let y = 250;
+            let y = HOTPOT.LAYOUT.GAMEOVER_SCORES_START_Y;
             for (const p of this.game.state.players) {
-                this.gameCtx.font = '16px Arial';
-                this.gameCtx.fillStyle = p.won ? '#ffd700' : '#ccc';
+                this.ctx.font = '16px Arial';
+                this.ctx.fillStyle = p.won ? '#ffd700' : '#ccc';
                 const setInfo = p.sets.length > 0 ? ` (${p.sets.length} sets)` : '';
-                this.gameCtx.fillText(`${p.name}: ${p.score} points${setInfo}`, HOTPOT.WIDTH / 2, y);
+                this.ctx.fillText(`${p.name}: ${p.score} points${setInfo}`, HOTPOT.WIDTH / 2, y);
                 y += 30;
             }
         }
 
         const menu = this.game.menuManager.getGameOverMenu(!!this.game.networkSession);
-        const buttonWidth = 240, buttonHeight = 60, startY = 350, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.GAMEOVER_BUTTON_WIDTH;
+        const buttonHeight = HOTPOT.LAYOUT.GAMEOVER_BUTTON_HEIGHT;
+        const startY = HOTPOT.LAYOUT.GAMEOVER_BUTTON_START_Y;
+        const spacing = HOTPOT.LAYOUT.GAMEOVER_BUTTON_SPACING;
         for (let i = 0; i < menu.buttons.length; i++) {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + i * spacing;
             const isHovered = this.input.isElementHovered(`hotpot_gameover_button_${i}`);
             const isSelected = menu.selectedIndex === i;
 
-            this.gameCtx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
-            this.gameCtx.fillRect(x, y, buttonWidth, buttonHeight);
-            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-            this.gameCtx.lineWidth = 3;
-            this.gameCtx.strokeRect(x, y, buttonWidth, buttonHeight);
-            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-            this.gameCtx.font = 'bold 20px Arial';
-            this.gameCtx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
+            this.ctx.fillStyle = (isSelected || isHovered) ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.ctx.fillRect(x, y, buttonWidth, buttonHeight);
+            this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeRect(x, y, buttonWidth, buttonHeight);
+            this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.ctx.font = 'bold 20px Arial';
+            this.ctx.fillText(menu.buttons[i].text, x + buttonWidth / 2, y + buttonHeight / 2 + 7);
         }
     }
 
     drawMessage() {
-        this.gameCtx.fillStyle = 'rgba(0,0,0,0.8)';
-        this.gameCtx.fillRect(150, this.game.msgY, 500, 50);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.HIGHLIGHT;
-        this.gameCtx.lineWidth = 2;
-        this.gameCtx.strokeRect(150, this.game.msgY, 500, 50);
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 16px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText(this.game.state.message, HOTPOT.WIDTH / 2, this.game.msgY + 30);
+        const msgX = HOTPOT.WIDTH / 2 - HOTPOT.LAYOUT.MSG_WIDTH / 2;
+        this.ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        this.ctx.fillRect(msgX, this.game.msgY, HOTPOT.LAYOUT.MSG_WIDTH, HOTPOT.LAYOUT.MSG_HEIGHT);
+        this.ctx.strokeStyle = HOTPOT.COLORS.HIGHLIGHT;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(msgX, this.game.msgY, HOTPOT.LAYOUT.MSG_WIDTH, HOTPOT.LAYOUT.MSG_HEIGHT);
+        this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(this.game.state.message, HOTPOT.WIDTH / 2, this.game.msgY + 30);
     }
 }

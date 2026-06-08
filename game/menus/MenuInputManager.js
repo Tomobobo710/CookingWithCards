@@ -36,7 +36,7 @@ class HotpotMenuInputManager {
         // Left mouse click on button bounds
         if (this.input.isLeftMouseButtonJustPressed()) {
             const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 250, spacing = 75;
+            const buttonWidth = HOTPOT.LAYOUT.MENU_BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.MENU_BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.MENU_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.MENU_BUTTON_SPACING;
             for (let i = 0; i < menu.buttons.length; i++) {
                 const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
                 const y = startY + i * spacing;
@@ -82,7 +82,7 @@ class HotpotMenuInputManager {
 
         if (this.input.isLeftMouseButtonJustPressed()) {
             const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 220, spacing = 75;
+            const buttonWidth = HOTPOT.LAYOUT.MENU_BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.MENU_BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.MP_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.MENU_BUTTON_SPACING;
             for (let i = 0; i < menu.buttons.length; i++) {
                 const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
                 const y = startY + i * spacing;
@@ -133,7 +133,7 @@ class HotpotMenuInputManager {
 
         if (this.input.isLeftMouseButtonJustPressed()) {
             const pointer = this.input.getPointerPosition();
-            const buttonWidth = 240, buttonHeight = 60, startY = 350, spacing = 75;
+            const buttonWidth = HOTPOT.LAYOUT.GAMEOVER_BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.GAMEOVER_BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.GAMEOVER_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.GAMEOVER_BUTTON_SPACING;
             for (let i = 0; i < menu.buttons.length; i++) {
                 const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
                 const y = startY + i * spacing;
@@ -268,9 +268,9 @@ class HotpotMenuInputManager {
 
     snapToHover(menu) {
         const pointer = this.input.getPointerPosition();
-        const buttonWidth = 240, buttonHeight = 60;
-        const startY = menu === this.game.menuManager.mainMenu ? 250 : 220;
-        const spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.MENU_BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.MENU_BUTTON_HEIGHT;
+        const startY = menu === this.game.menuManager.mainMenu ? HOTPOT.LAYOUT.MENU_BUTTON_START_Y : HOTPOT.LAYOUT.MP_BUTTON_START_Y;
+        const spacing = HOTPOT.LAYOUT.MENU_BUTTON_SPACING;
         for (let i = 0; i < menu.buttons.length; i++) {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + i * spacing;
@@ -285,7 +285,7 @@ class HotpotMenuInputManager {
 
     registerMainMenuButtons() {
         if (this.game.mainMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 250, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.MENU_BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.MENU_BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.MENU_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.MENU_BUTTON_SPACING;
         this.game.mainMenu.buttons.forEach((button, index) => {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + index * spacing;
@@ -298,7 +298,7 @@ class HotpotMenuInputManager {
 
     registerMultiplayerMenuButtons() {
         if (this.game.multiplayerMenu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 220, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.MENU_BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.MENU_BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.MP_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.MENU_BUTTON_SPACING;
         this.game.multiplayerMenu.buttons.forEach((button, index) => {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + index * spacing;
@@ -313,7 +313,7 @@ class HotpotMenuInputManager {
         const isOnline = !!this.game.networkSession;
         const menu = isOnline ? this.game.onlineGameOverMenu : this.game.gameOverMenu;
         if (menu.buttonsRegistered) return;
-        const buttonWidth = 240, buttonHeight = 60, startY = 350, spacing = 75;
+        const buttonWidth = HOTPOT.LAYOUT.GAMEOVER_BUTTON_WIDTH, buttonHeight = HOTPOT.LAYOUT.GAMEOVER_BUTTON_HEIGHT, startY = HOTPOT.LAYOUT.GAMEOVER_BUTTON_START_Y, spacing = HOTPOT.LAYOUT.GAMEOVER_BUTTON_SPACING;
         menu.buttons.forEach((button, index) => {
             const x = HOTPOT.WIDTH / 2 - buttonWidth / 2;
             const y = startY + index * spacing;

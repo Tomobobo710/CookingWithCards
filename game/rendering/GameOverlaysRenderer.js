@@ -1,25 +1,26 @@
-// game/GameOverlaysRenderer.js
+// game/rendering/GameOverlaysRenderer.js
 // Renders layers drawn on top of the main game canvas: settings modals,
 // plus the separate GUI canvas and debug canvas passes.
 
 class HotpotGameOverlaysRenderer {
     constructor(game) {
         this.game = game;
-        this.gameCtx = game.gameCtx;
+        this.ctx = game.gameCtx;
         this.guiCtx = game.guiCtx;
         this.debugCtx = game.debugCtx;
         this.input = game.input;
     }
 
     getSettingsModalLayout() {
+        const L = HOTPOT.LAYOUT;
         const isOnline = !!this.game.networkSession;
-        const modalX = HOTPOT.WIDTH / 2 - 150;
-        const modalY = HOTPOT.HEIGHT / 2 - (isOnline ? 110 : 140);
-        const modalW = 300;
-        const modalH = isOnline ? 220 : 280;
-        const btnW = 120;
-        const btnH = 35;
-        let btnY = modalY + (isOnline ? 70 : 90);
+        const modalW = L.SETTINGS_MODAL_WIDTH;
+        const modalH = isOnline ? L.SETTINGS_MODAL_HEIGHT_ONLINE : L.SETTINGS_MODAL_HEIGHT_OFFLINE;
+        const modalX = HOTPOT.WIDTH / 2 - modalW / 2;
+        const modalY = HOTPOT.HEIGHT / 2 - modalH / 2;
+        const btnW = L.SETTINGS_BTN_WIDTH;
+        const btnH = L.SETTINGS_BTN_HEIGHT;
+        let btnY = modalY + (isOnline ? L.SETTINGS_BTN_VGAP : L.SETTINGS_SPEED_Y_OFFSET);
         const buttons = [];
 
         if (!isOnline) {
@@ -60,48 +61,48 @@ class HotpotGameOverlaysRenderer {
     }
 
     drawSettingsModal() {
-        this.gameCtx.fillStyle = 'rgba(0,0,0,0.7)';
-        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+        this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        this.ctx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
 
         const { isOnline, modalX, modalY, modalW, modalH, buttons } = this.getSettingsModalLayout();
 
-        this.gameCtx.fillStyle = HOTPOT.COLORS.UI_BG;
-        this.gameCtx.fillRect(modalX, modalY, modalW, modalH);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.gameCtx.lineWidth = 2;
-        this.gameCtx.strokeRect(modalX, modalY, modalW, modalH);
+        this.ctx.fillStyle = HOTPOT.COLORS.UI_BG;
+        this.ctx.fillRect(modalX, modalY, modalW, modalH);
+        this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(modalX, modalY, modalW, modalH);
 
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 20px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText('Settings', HOTPOT.WIDTH / 2, modalY + 35);
+        this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.ctx.font = 'bold 20px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('Settings', HOTPOT.WIDTH / 2, modalY + 35);
 
-        this.gameCtx.font = '14px Arial';
+        this.ctx.font = '14px Arial';
 
         this.game.settingsButtons = [];
 
         const drawButton = (button) => {
             button.hovered = !this.game.settingsConfirmOpen && this.input.isElementHovered(button.id);
-            this.gameCtx.fillStyle = button.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
-            this.gameCtx.fillRect(button.x, button.y, button.w, button.h);
-            this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-            this.gameCtx.lineWidth = 3;
-            this.gameCtx.strokeRect(button.x, button.y, button.w, button.h);
-            this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-            this.gameCtx.font = 'bold 13px Arial';
-            this.gameCtx.fillText(button.text, button.x + button.w / 2, button.y + button.h / 2 + 5);
+            this.ctx.fillStyle = button.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+            this.ctx.fillRect(button.x, button.y, button.w, button.h);
+            this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeRect(button.x, button.y, button.w, button.h);
+            this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+            this.ctx.font = 'bold 13px Arial';
+            this.ctx.fillText(button.text, button.x + button.w / 2, button.y + button.h / 2 + 5);
             this.game.settingsButtons.push(button);
         };
 
         if (!isOnline) {
             const speedCfg = this.game.flow.getSpeedConfig();
-            this.gameCtx.fillText(`Speed: ${speedCfg.name}`, HOTPOT.WIDTH / 2, modalY + 70);
+            this.ctx.fillText(`Speed: ${speedCfg.name}`, HOTPOT.WIDTH / 2, modalY + HOTPOT.LAYOUT.SETTINGS_SPEED_Y_OFFSET - 30);
         }
 
         buttons.forEach(drawButton);
     }
 
-drawProfileModal() {
+    drawProfileModal() {
         if (!this.game.profileOpen) return;
 
         if (!this.game.profileActionUI) {
@@ -113,18 +114,18 @@ drawProfileModal() {
             const ui = this.game.profileActionUI;
             ui.setThemeOverride(Object.entries(HOTPOT.COLORS.PROFILE).map(([k, v]) => ({ [k]: v })));
 
+            const L = HOTPOT.LAYOUT;
             const t = ui.theme;
             const overlays = this;
 
-            const modalW = 430;
-            const modalH = 380;
+            const modalW = L.PROFILE_MODAL_WIDTH;
+            const modalH = L.PROFILE_MODAL_HEIGHT;
             const modalX = HOTPOT.WIDTH / 2 - modalW / 2;
             const modalY = HOTPOT.HEIGHT / 2 - modalH / 2;
             const pad = 18;
             const contentX = pad;
             const contentW = modalW - pad * 2;
             const profileLayout = {
-                // Explicit positions are canvas/global coordinates.
                 avatarX: modalX + contentX,
                 avatarY: modalY + 52,
                 avatarW: contentW,
@@ -139,18 +140,16 @@ drawProfileModal() {
                 scrollW: contentW - 20 - 8
             };
 
-       // Panel — centered on screen
             const panel = new ActionUIPanel({
                 x: modalX, y: modalY, width: modalW, height: modalH,
                 title: 'Profile', shadow: true, fill: HOTPOT.COLORS.PROFILE.colorSurface, layer: 'gui'
             });
             panel._ui = ui;
 
-            // Current avatar — large centered emoji
             const np = this.game.renderer.table.nameplate;
             const currentAvatar = np ? np.getLocalAvatar() : null;
             this._profileAvatarLabel = new ActionUILabel({
-                text: currentAvatar || '😀',
+                text: currentAvatar || '\uD83D\uDE00',
                 x: profileLayout.avatarX,
                 y: profileLayout.avatarY,
                 width: profileLayout.avatarW,
@@ -166,7 +165,6 @@ drawProfileModal() {
             });
             ui.add(hintLabel);
 
-            // Scrollable grid — each scroller item is one row of 10 emoji buttons
             const scrollX = profileLayout.scrollX;
             const scrollY = profileLayout.scrollY;
             const scrollBarW = 20;
@@ -180,76 +178,74 @@ drawProfileModal() {
             const emojis = NAMEPLATE_EMOJIS.human;
             const totalRows = Math.ceil(emojis.length / cols);
 
-            // Build emoji row items so the scroller stacks rows, not individual emojis
-             this._profileEmojiItems = [];
-             for (let row = 0; row < totalRows; row++) {
-                 const rowStart = row * cols;
-                 this._profileEmojiItems.push({
-                     row: row,
-                     draw(ctx, y) {
-                         const np2 = overlays.game.renderer.table.nameplate;
-                         const cur = np2 ? np2.getLocalAvatar() : null;
-                         const by = y + 3;
-                         const btnW = cellSize - 4;
-                         const btnH = cellSize - 4;
+            this._profileEmojiItems = [];
+            for (let row = 0; row < totalRows; row++) {
+                const rowStart = row * cols;
+                this._profileEmojiItems.push({
+                    row: row,
+                    draw(ctx, y) {
+                        const np2 = overlays.game.renderer.table.nameplate;
+                        const cur = np2 ? np2.getLocalAvatar() : null;
+                        const by = y + 3;
+                        const btnW = cellSize - 4;
+                        const btnH = cellSize - 4;
 
-                         for (let col = 0; col < cols; col++) {
-                             const emojiIndex = rowStart + col;
-                             if (emojiIndex >= emojis.length) break;
+                        for (let col = 0; col < cols; col++) {
+                            const emojiIndex = rowStart + col;
+                            if (emojiIndex >= emojis.length) break;
 
-                             const emoji = emojis[emojiIndex];
-                             const isSelected = emoji === cur;
-                             const bx = scrollX + gridInsetX + col * cellSize;
-                             const pointer = overlays.game.input.getPointerPosition();
-                             const isHovered =
-                                 pointer.x >= bx && pointer.x <= bx + btnW &&
-                                 pointer.y >= by && pointer.y <= by + btnH;
+                            const emoji = emojis[emojiIndex];
+                            const isSelected = emoji === cur;
+                            const bx = scrollX + gridInsetX + col * cellSize;
+                            const pointer = overlays.game.input.getPointerPosition();
+                            const isHovered =
+                                pointer.x >= bx && pointer.x <= bx + btnW &&
+                                pointer.y >= by && pointer.y <= by + btnH;
 
-                             if (isSelected) {
-                                 ActionUIDrawUtils.fillRoundRect(ctx, bx, by, btnW, btnH, 5, t.colorPrimary);
-                             } else if (isHovered) {
-                                 ActionUIDrawUtils.fillRoundRect(ctx, bx, by, btnW, btnH, 5, t.withAlpha(t.colorPrimary, 0.25));
-                                 ActionUIDrawUtils.strokeRoundRect(ctx, bx, by, btnW, btnH, 5, t.colorPrimary, 1.5);
-                             } else {
-                                 ActionUIDrawUtils.strokeRoundRect(ctx, bx, by, btnW, btnH, 5, t.colorBorder, 1);
-                             }
+                            if (isSelected) {
+                                ActionUIDrawUtils.fillRoundRect(ctx, bx, by, btnW, btnH, 5, t.colorPrimary);
+                            } else if (isHovered) {
+                                ActionUIDrawUtils.fillRoundRect(ctx, bx, by, btnW, btnH, 5, t.withAlpha(t.colorPrimary, 0.25));
+                                ActionUIDrawUtils.strokeRoundRect(ctx, bx, by, btnW, btnH, 5, t.colorPrimary, 1.5);
+                            } else {
+                                ActionUIDrawUtils.strokeRoundRect(ctx, bx, by, btnW, btnH, 5, t.colorBorder, 1);
+                            }
 
-                             ctx.font = '18px Arial';
-                             ctx.textAlign = 'center';
-                             ctx.textBaseline = 'middle';
-                             ctx.fillStyle = t.colorText;
-                             ctx.fillText(emoji, bx + btnW / 2, by + btnH / 2);
-                         }
-                     }
-                 });
-             }
+                            ctx.font = '18px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillStyle = t.colorText;
+                            ctx.fillText(emoji, bx + btnW / 2, by + btnH / 2);
+                        }
+                    }
+                });
+            }
 
-             const scroller = new ActionUIScrollableArea({
-                 listAreaX: scrollX,
-                 listAreaY: scrollY,
-                 listAreaWidth: scrollW,
-                 listAreaHeight: scrollH,
-                 itemHeight: rowH,
-                 padding: 2,
-                 scrollBarX: scrollX + scrollW + scrollGap,
-                 scrollBarY: scrollY,
-                 scrollBarTrackHeight: scrollH,
-                 scrollBarThumbStartY: scrollY,
-                 enableClipping: true,
-                 clipBounds: { x: scrollX, y: scrollY, width: scrollW, height: scrollH },
-                 backgroundColor: t.colorSurface,
-                 borderColor: t.colorBorder,
-                 borderWidth: 1,
-                 cornerRadius: t.radiusMd,
-                 generateItemId: (item, index) => `emoji_row_${index}`,
-                 onRegisterItemInput: (itemId, index, bounds, layer = "gui") => {
-                     this.game.input.registerElement(itemId, { bounds: () => bounds }, layer);
-                 }
-             }, this.game.input, this.guiCtx);
+            const scroller = new ActionUIScrollableArea({
+                listAreaX: scrollX,
+                listAreaY: scrollY,
+                listAreaWidth: scrollW,
+                listAreaHeight: scrollH,
+                itemHeight: rowH,
+                padding: 2,
+                scrollBarX: scrollX + scrollW + scrollGap,
+                scrollBarY: scrollY,
+                scrollBarTrackHeight: scrollH,
+                scrollBarThumbStartY: scrollY,
+                enableClipping: true,
+                clipBounds: { x: scrollX, y: scrollY, width: scrollW, height: scrollH },
+                backgroundColor: t.colorSurface,
+                borderColor: t.colorBorder,
+                borderWidth: 1,
+                cornerRadius: t.radiusMd,
+                generateItemId: (item, index) => `emoji_row_${index}`,
+                onRegisterItemInput: (itemId, index, bounds, layer = "gui") => {
+                    this.game.input.registerElement(itemId, { bounds: () => bounds }, layer);
+                }
+            }, this.game.input, this.guiCtx);
 
             panel._scroller = scroller;
 
-            // Close button
             const closeBtn = new ActionUIButton({
                 x: profileLayout.closeX,
                 y: profileLayout.closeY,
@@ -260,25 +256,23 @@ drawProfileModal() {
             });
             ui.add(closeBtn);
 
-           this._profileCloseBtn = closeBtn;
+            this._profileCloseBtn = closeBtn;
             this._profilePanel = panel;
             this._profileScroller = scroller;
             this._profileEmojis = emojis;
         }
 
-    // Update & draw every frame
         const ui = this.game.profileActionUI;
         const panel = this._profilePanel;
         const scroller = this._profileScroller;
         const t = ui.theme;
         const cols = 10;
         const totalItems = this._profileEmojiItems.length;
-       const np = this.game.renderer.table.nameplate;
+        const np = this.game.renderer.table.nameplate;
         const currentAvatar = np ? np.getLocalAvatar() : null;
 
-        // Update avatar display label
         if (this._profileAvatarLabel) {
-            this._profileAvatarLabel.text = currentAvatar || '😀';
+            this._profileAvatarLabel.text = currentAvatar || '\uD83D\uDE00';
         }
         if (this._profileCloseBtn) {
             this._profileCloseBtn._hovered = this.game.input.isElementHovered(this._profileCloseBtn.id, "gui");
@@ -288,7 +282,6 @@ drawProfileModal() {
         scroller.update(totalItems, 0);
         scroller.refreshItems(this._profileEmojiItems, "gui");
 
-        // Handle emoji clicks by converting the pointer position into a grid cell
         const pointer = this.game.input.getPointerPosition();
         for (let row = 0; row < totalItems; row++) {
             if (this.game.input.isElementJustPressed(`emoji_row_${row}`, "gui")) {
@@ -315,79 +308,78 @@ drawProfileModal() {
     }
 
     drawSettingsConfirmModal() {
-        this.gameCtx.fillStyle = 'rgba(0,0,0,0.55)';
-        this.gameCtx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
+        this.ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        this.ctx.fillRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
 
-        const modalX = HOTPOT.WIDTH / 2 - 200;
-        const modalY = HOTPOT.HEIGHT / 2 - 70;
-        const modalW = 400;
-        const modalH = 140;
+        const L = HOTPOT.LAYOUT;
+        const modalW = L.CONFIRM_MODAL_WIDTH;
+        const modalH = L.CONFIRM_MODAL_HEIGHT;
+        const modalX = HOTPOT.WIDTH / 2 - modalW / 2;
+        const modalY = HOTPOT.HEIGHT / 2 - modalH / 2;
 
-        this.gameCtx.fillStyle = 'rgb(40, 20, 10)';
-        this.gameCtx.fillRect(modalX, modalY, modalW, modalH);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.gameCtx.lineWidth = 2;
-        this.gameCtx.strokeRect(modalX, modalY, modalW, modalH);
+        this.ctx.fillStyle = 'rgb(40, 20, 10)';
+        this.ctx.fillRect(modalX, modalY, modalW, modalH);
+        this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(modalX, modalY, modalW, modalH);
 
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 18px Arial';
-        this.gameCtx.textAlign = 'center';
-        this.gameCtx.fillText('Quit Game?', HOTPOT.WIDTH / 2, modalY + 30);
+        this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.ctx.font = 'bold 18px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('Quit Game?', HOTPOT.WIDTH / 2, modalY + 30);
 
-        this.gameCtx.font = '13px Arial';
-        this.gameCtx.fillStyle = '#cccccc';
+        this.ctx.font = '13px Arial';
+        this.ctx.fillStyle = '#cccccc';
         if (this.game.networkSession) {
-            this.gameCtx.fillText('You will be disconnected from the online session.', HOTPOT.WIDTH / 2, modalY + 55);
+            this.ctx.fillText('You will be disconnected from the online session.', HOTPOT.WIDTH / 2, modalY + 55);
         } else {
-            this.gameCtx.fillText('Are you sure you want to quit?', HOTPOT.WIDTH / 2, modalY + 55);
+            this.ctx.fillText('Are you sure you want to quit?', HOTPOT.WIDTH / 2, modalY + 55);
         }
 
-        const btnW = 120;
-        const btnH = 35;
+        const btnW = L.CONFIRM_BTN_WIDTH;
+        const btnH = L.CONFIRM_BTN_HEIGHT;
         const btnY = modalY + 75;
-        const spacing = 20;
+        const spacing = L.CONFIRM_BTN_SPACING;
         const totalW = btnW * 2 + spacing;
         const startX = HOTPOT.WIDTH / 2 - totalW / 2;
 
-    this.game.settingsConfirmButtons = [];
+        this.game.settingsConfirmButtons = [];
 
         this._confirmBtnX = startX;
         this._confirmBtnY = btnY;
 
         const yesBtn = { x: startX, y: btnY, w: btnW, h: btnH, hovered: false, action: 'confirmYes' };
         yesBtn.hovered = this.input.isElementHovered('settings_confirm_yes');
-        this.gameCtx.fillStyle = yesBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
-        this.gameCtx.fillRect(yesBtn.x, yesBtn.y, btnW, btnH);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.gameCtx.lineWidth = 2;
-        this.gameCtx.strokeRect(yesBtn.x, yesBtn.y, btnW, btnH);
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 13px Arial';
-        this.gameCtx.fillText('Yes', yesBtn.x + btnW / 2, yesBtn.y + btnH / 2 + 5);
+        this.ctx.fillStyle = yesBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+        this.ctx.fillRect(yesBtn.x, yesBtn.y, btnW, btnH);
+        this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(yesBtn.x, yesBtn.y, btnW, btnH);
+        this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.ctx.font = 'bold 13px Arial';
+        this.ctx.fillText('Yes', yesBtn.x + btnW / 2, yesBtn.y + btnH / 2 + 5);
         this.game.settingsConfirmButtons.push(yesBtn);
 
         const noBtn = { x: startX + btnW + spacing, y: btnY, w: btnW, h: btnH, hovered: false, action: 'confirmNo' };
         noBtn.hovered = this.input.isElementHovered('settings_confirm_no');
-        this.gameCtx.fillStyle = noBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
-        this.gameCtx.fillRect(noBtn.x, noBtn.y, btnW, btnH);
-        this.gameCtx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.gameCtx.lineWidth = 2;
-        this.gameCtx.strokeRect(noBtn.x, noBtn.y, btnW, btnH);
-        this.gameCtx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.gameCtx.font = 'bold 13px Arial';
-        this.gameCtx.fillText('No', noBtn.x + btnW / 2, noBtn.y + btnH / 2 + 5);
+        this.ctx.fillStyle = noBtn.hovered ? HOTPOT.COLORS.HIGHLIGHT : HOTPOT.COLORS.UI_BG;
+        this.ctx.fillRect(noBtn.x, noBtn.y, btnW, btnH);
+        this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(noBtn.x, noBtn.y, btnW, btnH);
+        this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
+        this.ctx.font = 'bold 13px Arial';
+        this.ctx.fillText('No', noBtn.x + btnW / 2, noBtn.y + btnH / 2 + 5);
         this.game.settingsConfirmButtons.push(noBtn);
     }
 
     drawGUILayer() {
         this.guiCtx.clearRect(0, 0, HOTPOT.WIDTH, HOTPOT.HEIGHT);
 
-        // Let ActionNetManagerGUI draw login/lobby UI
         if (this.game.gameState === 'multiplayerLogin' && this.game.gui) {
             this.game.gui.action_draw();
         }
 
-        // Draw profile UI if open
         if (this.game.profileOpen) {
             this.drawProfileModal();
         }
