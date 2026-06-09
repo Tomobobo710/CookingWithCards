@@ -184,16 +184,28 @@ class Card {
         }
         ctx.restore();
 
-       if (this.highlighted) {
+      if (this.highlighted && this._showArrows) {
             ctx.save();
-            if (wasMirrored) ctx.scale(-1, 1);
-            ctx.strokeStyle = this.highlighted === 'triple' ? '#00ff00' : '#00ccff';
-            ctx.lineWidth = 4 * this.scale;
+            const arrowY = this.height / 2 + 16 * this.scale;
+            const arrowColor = this.highlighted === 'triple' ? '#00cc00' : '#3399ff';
+            const arrowSize = 7 * this.scale;
+
+            ctx.fillStyle = arrowColor;
+            ctx.strokeStyle = arrowColor;
+            ctx.lineWidth = 2 * this.scale;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.translate(0, arrowY);
+
             ctx.beginPath();
-            this.drawRoundedRect(ctx, -this.width / 2, -this.height / 2, this.width, this.height);
-            ctx.stroke();
-            ctx.fillStyle = this.highlighted === 'triple' ? 'rgba(0,255,0,0.12)' : 'rgba(0,204,255,0.12)';
+            ctx.moveTo(0, -arrowSize);
+            ctx.lineTo(-arrowSize * 0.6, arrowSize * 0.4);
+            ctx.lineTo(0, arrowSize * 0.1);
+            ctx.lineTo(arrowSize * 0.6, arrowSize * 0.4);
+            ctx.closePath();
             ctx.fill();
+            ctx.stroke();
+
             ctx.restore();
         }
 

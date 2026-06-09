@@ -190,10 +190,25 @@ class HotpotGameInputController {
         this.game.turnPhase = 'discard';
         this.game.bestSets = this.game.state.findBestSets(player.getAllCards(), HOTPOT.GAME.SETS_TO_WIN);
 
-        for (const c of player.getAllCards()) c.highlighted = null;
-        for (const set of this.game.bestSets) {
+        for (const c of player.getAllCards()) {
+            c.highlighted = null;
+            c._showArrows = false;
+        }
+        for (const c of player.discardPile) c.highlighted = null;
+
+        if (!player.drawnCard) return;
+
+        const drawnCard = player.drawnCard;
+        const allCards = player.getAllCards();
+        const allSets = this.game.state.findAllPossibleSets(allCards);
+
+        for (const set of allSets) {
+            if (!set.includes(drawnCard)) continue;
             const type = set[0].ingredient === set[1].ingredient ? 'triple' : 'category';
-            for (const c of set) c.highlighted = type;
+            for (const c of set) {
+                c.highlighted = type;
+                c._showArrows = true;
+            }
         }
 
         if (this.game.state.canWin(player)) {

@@ -433,8 +433,9 @@ class HotpotNetworkSession {
         this.game.bestSets = [];
         for (const p of this.game.state.players) {
             this.game.sortHandByCategory(p);
-            for (const c of p.hand) c.highlighted = null;
-            if (p.drawnCard) p.drawnCard.highlighted = null;
+            for (const c of p.hand) { c.highlighted = null; c._showArrows = false; }
+            if (p.drawnCard) { p.drawnCard.highlighted = null; p.drawnCard._showArrows = false; }
+            for (const c of p.discardPile) c.highlighted = null;
         }
     }
 
@@ -683,10 +684,22 @@ class HotpotNetworkSession {
                 this.game.audio.play('draw', { volume: 0.2 });
                 this.game.turnPhase = 'discard';
                 this.game.bestSets = this.gameState.findBestSets(player.getAllCards(), HOTPOT.GAME.SETS_TO_WIN);
-                for (const c of player.getAllCards()) c.highlighted = null;
-                for (const set of this.game.bestSets) {
-                    const type = set[0].ingredient === set[1].ingredient ? 'triple' : 'category';
-                    for (const c of set) c.highlighted = type;
+                for (const c of player.getAllCards()) {
+                    c.highlighted = null;
+                    c._showArrows = false;
+                }
+                for (const c of player.discardPile) c.highlighted = null;
+                if (player.drawnCard) {
+                    const drawnCard = player.drawnCard;
+                    const allSets = this.game.state.findAllPossibleSets(player.getAllCards());
+                    for (const set of allSets) {
+                        if (!set.includes(drawnCard)) continue;
+                        const type = set[0].ingredient === set[1].ingredient ? 'triple' : 'category';
+                        for (const c of set) {
+                            c.highlighted = type;
+                            c._showArrows = true;
+                        }
+                    }
                 }
             }
         } else if (action === "drawDiscard") {
@@ -697,10 +710,22 @@ class HotpotNetworkSession {
                 this.game.audio.play('draw', { volume: 0.2 });
                 this.game.turnPhase = 'discard';
                 this.game.bestSets = this.gameState.findBestSets(player.getAllCards(), HOTPOT.GAME.SETS_TO_WIN);
-                for (const c of player.getAllCards()) c.highlighted = null;
-                for (const set of this.game.bestSets) {
-                    const type = set[0].ingredient === set[1].ingredient ? 'triple' : 'category';
-                    for (const c of set) c.highlighted = type;
+                for (const c of player.getAllCards()) {
+                    c.highlighted = null;
+                    c._showArrows = false;
+                }
+                for (const c of player.discardPile) c.highlighted = null;
+                if (player.drawnCard) {
+                    const drawnCard = player.drawnCard;
+                    const allSets = this.game.state.findAllPossibleSets(player.getAllCards());
+                    for (const set of allSets) {
+                        if (!set.includes(drawnCard)) continue;
+                        const type = set[0].ingredient === set[1].ingredient ? 'triple' : 'category';
+                        for (const c of set) {
+                            c.highlighted = type;
+                            c._showArrows = true;
+                        }
+                    }
                 }
             }
         } else       if (action === "discard") {
@@ -751,8 +776,9 @@ class HotpotNetworkSession {
                 this.game.bestSets = [];
                 for (const p of this.game.state.players) {
                     this.game.sortHandByCategory(p);
-                    for (const c of p.hand) c.highlighted = null;
-                    if (p.drawnCard) p.drawnCard.highlighted = null;
+                    for (const c of p.hand) { c.highlighted = null; c._showArrows = false; }
+                    if (p.drawnCard) { p.drawnCard.highlighted = null; p.drawnCard._showArrows = false; }
+                    for (const c of p.discardPile) c.highlighted = null;
                 }
             }
         else if (action === "win") {

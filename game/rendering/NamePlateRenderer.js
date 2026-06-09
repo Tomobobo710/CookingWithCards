@@ -190,6 +190,30 @@ class NamePlateRenderer {
         const h = NAMEPLATE.height;
         const r = NAMEPLATE.borderRadius;
 
+        const cp = this.game.state.getCurrentPlayer();
+        let isMyTurn = false;
+        if (this.game.networkSession && this.game.networkSession.localPlayerIndex !== undefined) {
+            isMyTurn = this.game.networkSession.gameState.currentPlayerIndex === this.game.networkSession.localPlayerIndex;
+        } else {
+            isMyTurn = cp && cp.isHuman;
+        }
+
+        const isLocalPlayer = player.isLocal || (player.isHuman && player.name === 'You');
+        const isCurrentTurnPlayer = isLocalPlayer ? isMyTurn : cp === player;
+
+        if (isCurrentTurnPlayer) {
+            const pulse = 0.5 + 0.5 * Math.sin(Card.glowPhase);
+            ctx.save();
+            ctx.shadowColor = HOTPOT.COLORS.PLAYER_TURN;
+            ctx.shadowBlur = 8 + pulse * 14;
+            this._roundRect(ctx, x - 2, y - 2, w + 4, h + 4, r + 2);
+            ctx.strokeStyle = HOTPOT.COLORS.PLAYER_TURN;
+            ctx.globalAlpha = 0.4 + pulse * 0.4;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.restore();
+        }
+
         ctx.save();
 
         // Set clip to rounded plate bounds — everything drawn after this is clipped
@@ -212,10 +236,10 @@ class NamePlateRenderer {
         const contentY = y + h / 2;
 
         // Determine if this is the local player
-        const isLocal = player.isLocal || (player.isHuman && player.name === 'You');
+        const isLocalForAvatar = player.isLocal || (player.isHuman && player.name === 'You');
 
         // Emoji avatar
-        const avatar = this._getAvatar(player, isLocal);
+        const avatar = this._getAvatar(player, isLocalForAvatar);
         ctx.font = `${AVATAR.size}px Arial`;
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
@@ -237,7 +261,7 @@ class NamePlateRenderer {
      const badgeY = contentY + BADGE.yOffset;
 
         // "YOU" badge for local player
-        if (isLocal) {
+        if (isLocalForAvatar) {
             this._drawBadge(ctx, badgeX, badgeY, 'YOU', COLORS.localPlayer);
             const youBadgeW = ctx.measureText('YOU').width + BADGE.textPadding;
             badgeX += youBadgeW + BADGE.gap;
@@ -266,7 +290,6 @@ class NamePlateRenderer {
         ctx.stroke();
 
         // Thinking indicator
-        const cp = this.game.state.getCurrentPlayer();
         if (cp === player) {
             const isMyTurn = this.game.networkSession
                 ? this.game.networkSession.gameState.currentPlayerIndex === this.game.networkSession.localPlayerIndex

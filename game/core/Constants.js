@@ -50,6 +50,7 @@ const HOTPOT = {
         DEBUG_BG: "rgba(0,0,0,0.7)",
         DEBUG_TEXT: "#00ff00",
         GLOW: "#ffd700",
+        PLAYER_TURN: "#00ff00",
 
         PROFILE: {
             colorBackground: "#1a0f0a",

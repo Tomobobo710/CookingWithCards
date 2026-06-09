@@ -135,8 +135,9 @@ class HotpotGameFlow {
         this.game.turnPhase = 'draw';
         this.game.bestSets = [];
         for (const p of this.game.state.players) {
-            for (const c of p.hand) c.highlighted = null;
-            if (p.drawnCard) p.drawnCard.highlighted = null;
+            for (const c of p.hand) { c.highlighted = null; c._showArrows = false; }
+            if (p.drawnCard) { p.drawnCard.highlighted = null; p.drawnCard._showArrows = false; }
+            for (const c of p.discardPile) c.highlighted = null;
         }
     }
 
