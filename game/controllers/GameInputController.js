@@ -179,6 +179,12 @@ class HotpotGameInputController {
                 this.game.flow.applySpeedToCard(card);
                 card.moveTo(rect.x, rect.y);
                 this.game.state.drawFromDiscard(player, other);
+                if (other.discardPile.length > 0) {
+                    const revealed = other.discardPile[other.discardPile.length - 1];
+                    this.game.flow.applySpeedToCard(revealed);
+                    revealed.faceUp = false;
+                    revealed.flip();
+                }
                 this.audio.play('draw', { volume: 0.3 });
                 this.afterLocalPlayerDraw(player);
                 return;

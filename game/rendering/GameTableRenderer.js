@@ -67,6 +67,9 @@ class HotpotGameTableRenderer {
                     topCard.glowing = true;
                 }
             }
+            if (this.game.state.deck.length > 0) {
+                this.game.state.deck[this.game.state.deck.length - 1].glowing = true;
+            }
         }
 
         if (this.game.turnPhase === 'discard') {
@@ -194,69 +197,64 @@ class HotpotGameTableRenderer {
 
     drawDeck() {
         const rect = this.game.layout.getDeckRect();
-        const player = this.game.state.getCurrentPlayer();
+        const deck = this.game.state.deck;
         let isMyTurn = false;
-        let deckLength = this.game.state.deck.length;
         if (this.game.networkSession && !this.game.networkSession.isHost) {
             isMyTurn = this.game.networkSession.gameState.currentPlayerIndex === this.game.networkSession.localPlayerIndex;
-            const remoteGame = this.game.networkSession.syncSystem ? this.game.networkSession.syncSystem.getRemote("game") : null;
-            if (remoteGame && typeof remoteGame.deckCount === "number") {
-                deckLength = remoteGame.deckCount;
-            }
         } else {
             const localPlayer = this.game.flow.findLocalPlayer();
+            const player = this.game.state.getCurrentPlayer();
             isMyTurn = player === localPlayer;
         }
-        const isClickable = isMyTurn && this.game.turnPhase === 'draw' && deckLength > 0;
 
-        this.ctx.fillStyle = isClickable ? '#a00000' : HOTPOT.COLORS.DECK;
-        this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-        this.ctx.strokeStyle = HOTPOT.COLORS.UI_BORDER;
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-
-        this.ctx.fillStyle = HOTPOT.COLORS.TEXT;
-        this.ctx.font = '26px Arial';
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText('🀄', rect.x + rect.w / 2, rect.y + rect.h / 2 + 8);
-
-        if (isClickable && this.game.state.deck.length > 0) {
-            this.ctx.fillStyle = '#ff6666';
-            this.ctx.font = '11px Arial';
+        if (deck.length > 0) {
+            const stackDepth = Math.min(deck.length, 3);
+            for (let i = stackDepth - 1; i >= 0; i--) {
+                const card = deck[deck.length - 1 - i];
+                const sx = rect.x + i * 2;
+                const sy = rect.y + i * 2;
+                card.x = sx;
+                card.y = sy;
+                card.targetX = sx;
+                card.targetY = sy;
+                card.faceUp = false;
+                card.draw(this.ctx);
+            }
+        } else {
+            this.ctx.fillStyle = 'rgba(44,62,80,0.6)';
+            this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+            this.ctx.strokeStyle = '#555';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
         }
     }
 
     drawDiscardPiles() {
-        const player = this.game.state.getCurrentPlayer();
-        let isMyTurn = false;
-        if (this.game.networkSession && this.game.networkSession.localPlayerIndex !== undefined) {
-            isMyTurn = this.game.networkSession.gameState.currentPlayerIndex === this.game.networkSession.localPlayerIndex;
-        } else {
-            isMyTurn = player && player.isHuman;
-        }
-        const isClickable = isMyTurn && this.game.turnPhase === 'draw';
-
         for (let i = 0; i < this.game.state.players.length; i++) {
             const p = this.game.state.players[i];
             const rect = this.game.layout.getDiscardRect(p);
-            const canClick = isClickable && i !== player.id && p.discardPile.length > 0;
 
             if (p.discardPile.length > 0) {
-                const topCard = p.discardPile[p.discardPile.length - 1];
-                topCard.moveTo(rect.x, rect.y);
-                topCard.scaleTo(HOTPOT.LAYOUT.CARD_SCALE);
-                topCard.draw(this.ctx);
+                const stackDepth = Math.min(p.discardPile.length, 3);
+                for (let j = stackDepth - 1; j >= 0; j--) {
+                    const card = p.discardPile[p.discardPile.length - 1 - j];
+                    card.moveTo(rect.x + j * 1.5, rect.y + j * 1.5);
+                    card.scaleTo(HOTPOT.LAYOUT.CARD_SCALE);
+                    if (j > 0) {
+                        const saved = card.faceUp;
+                        card.faceUp = false;
+                        card.draw(this.ctx);
+                        card.faceUp = saved;
+                    } else {
+                        card.draw(this.ctx);
+                    }
+                }
             } else {
                 this.ctx.fillStyle = 'rgba(80,40,20,0.6)';
                 this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
                 this.ctx.strokeStyle = '#555';
                 this.ctx.lineWidth = 2;
                 this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-            }
-
-            if (canClick) {
-                this.ctx.fillStyle = '#ffcc00';
-                this.ctx.font = '10px Arial';
             }
         }
     }

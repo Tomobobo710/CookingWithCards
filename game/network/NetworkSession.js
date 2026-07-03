@@ -242,6 +242,7 @@ class HotpotNetworkSession {
             player.isLocal = false;
             player.isRemote = false;
         }
+        this.gameState.deck = [];
         this.gameState.gamePhase = 'playing';
         this.gameState.currentPlayerIndex = 0;
         this.game.turnPhase = 'draw';
