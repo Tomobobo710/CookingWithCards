@@ -68,13 +68,8 @@ class HotpotNetworkSession {
             this.handlePlayerAction(message);
         });
 
-        // Listen for rematch requests (guest → host)
-        this.game.gui.registerMessageHandler("rematch", (message) => {
-            if (this.isHost) {
-                this._guestWantsRematch = true;
-                this.handleRematchRequest(message);
-            }
-        });
+        // Rematch intent is exchanged via the synced "match" source
+        // (wantsRematch field), so no dedicated message handler is needed.
 
             // Listen for disconnections (only host processes this)
         this.networkManager.on("userLeft", (user) => {
@@ -180,25 +175,19 @@ class HotpotNetworkSession {
     }
 
     resetOnlineGame() {
-        // Reset all players
-        for (const player of this.game.state.players) {
-            player.hand = [];
-            player.sets = [];
-            player.discardPile = [];
-            player.won = false;
-            player.hasDrawn = false;
-            player.drawnCard = null;
-            player.score = 0;
-           player.turnCount = 0;
-            player.isLocal = false;
-            player.isRemote = false;
+        // Fresh game: clear rematch intent and card-reveal flags so the next
+        // game-over reveal (and rematch handshake) behaves correctly.
+        this.rematchState.localRequested = false;
+        this.game._otherPlayersRevealed = false;
+        this.game._botRevealed = false;
+        if (this.game.menuInputManager) {
+            this.game.menuInputManager.unregisterGameOverMenuButtons();
+        }
+        if (this.game.waitingMenuInputManager) {
+            this.game.waitingMenuInputManager.unregisterRematchPendingMenuButtons();
         }
 
-        // Reset game state
-        this.gameState.gamePhase = 'playing';
-        this.gameState.currentPlayerIndex = 0;
-        this.game.turnPhase = 'draw';
-        this.game.bestSets = [];
+        this.clearPlayerState();
 
         // Create and shuffle deck
         const deckRect = this.game.getDeckRect();
@@ -213,6 +202,10 @@ class HotpotNetworkSession {
         }
         this.localPlayer.hasDrawn = false;
         this.localPlayer.drawnCard = null;
+        // The reset loop above cleared isLocal on every player. On the host
+        // (the only client that runs this reset) restore it so the game-over
+        // reveal skips the local hand instead of flipping it face down.
+        this.localPlayer.isLocal = true;
 
         // Apply deal animations
         const humanRects = this.game.getHandCardRects(this.localPlayer);
@@ -232,6 +225,27 @@ class HotpotNetworkSession {
                 card.targetRotation = ha;
             }
         }
+    }
+
+    clearPlayerState() {
+        for (const player of this.game.state.players) {
+            player.hand = [];
+            player.sets = [];
+            player.discardPile = [];
+            player.won = false;
+            player.hasDrawn = false;
+            player.drawnCard = null;
+            player.drawSourcePlayer = undefined;
+            player.lastDiscard = null;
+            player.score = 0;
+            player.turnCount = 0;
+            player.isLocal = false;
+            player.isRemote = false;
+        }
+        this.gameState.gamePhase = 'playing';
+        this.gameState.currentPlayerIndex = 0;
+        this.game.turnPhase = 'draw';
+        this.game.bestSets = [];
     }
 
   registerSyncSources() {
@@ -366,6 +380,7 @@ class HotpotNetworkSession {
             // Non-host: check if host ended the game
             const remoteMatch = this.syncSystem ? this.syncSystem.getRemote("match") : null;
             if (remoteMatch && remoteMatch.state === "GAME_OVER") {
+                this.state = "GAME_OVER";
                 this.game.gameState = "gameOver";
                 // Flip other player cards for reveal
                 if (!this.game._otherPlayersRevealed) {
@@ -566,7 +581,6 @@ class HotpotNetworkSession {
 
      endGame() {
         this.rematchState.localRequested = false;
-        this._guestWantsRematch = false;
         this.state = "GAME_OVER";
         this.game.gameState = "gameOver";
 
@@ -592,51 +606,43 @@ class HotpotNetworkSession {
         this.rematchState.localRequested = true;
         this.state = "REMATCH_PENDING";
         this.game.gameState = "rematchPending";
-
-        if (this.isHost) {
-            this.checkRematchConditions();
-        } else {
-            this.sendRematchRequest();
-        }
-        return true;
-    }
-
-    sendRematchRequest() {
-        if (!this.networkManager || !this.networkManager.isInRoom()) return;
-        this.networkManager.send({ type: "rematch" });
-    }
-
-    handleRematchRequest(message) {
-        this.rematchState.localRequested = true;
-        this.state = "REMATCH_PENDING";
-        this.game.gameState = "rematchPending";
+        // Our intent is broadcast via the synced "match" source (wantsRematch).
+        // If the opponent already wants a rematch, this may start it immediately.
         this.checkRematchConditions();
+        return true;
     }
 
     cancelRematch() {
         this.rematchState.localRequested = false;
         this.state = "GAME_OVER";
         this.game.gameState = "gameOver";
-    }
-
-    checkRematchConditions() {
-        if (this.state !== "REMATCH_PENDING") return;
-
-        if (this.isHost) {
-            // Host checks if guest wants rematch via message flag
-            if (this.rematchState.localRequested && this._guestWantsRematch) {
-                this.startRematch();
-            }
-        } else {
-            // Guest checks if host wants rematch
-            if (this.rematchState.localRequested) {
-                this.startRematch();
-            }
+        if (this.game.waitingMenuInputManager) {
+            this.game.waitingMenuInputManager.unregisterRematchPendingMenuButtons();
         }
     }
 
+    // Both players must want a rematch before it starts. Each side broadcasts
+    // its intent through the synced "match" source, so the opponent's wish is
+    // read from getRemote("match").wantsRematch. The host is authoritative: it
+    // performs the reset and drives the countdown, and the guest follows the
+    // host's COUNTDOWN state (exactly like the initial game start).
+    checkRematchConditions() {
+        if (this.state !== "REMATCH_PENDING") return;
+        if (!this.rematchState.localRequested) return;
+
+        const remoteMatch = this.syncSystem ? this.syncSystem.getRemote("match") : null;
+        const remoteWantsRematch = !!(remoteMatch && remoteMatch.wantsRematch);
+        if (!remoteWantsRematch) return;
+
+        if (this.isHost) {
+            this.startRematch();
+        }
+        // Guest: wait for the host to transition to COUNTDOWN (handled in
+        // checkHostWaitingState), which pulls us into the new game.
+    }
+
     startRematch() {
-        this.resetOnlineGame();
+        // startCountdown() already resets the game state via resetOnlineGame().
         this.startCountdown();
     }
 
@@ -1190,6 +1196,20 @@ class HotpotNetworkSession {
         } else if (remoteState === "COUNTDOWN") {
             this.state = "COUNTDOWN";
             this.game.gameState = "onlineMultiplayer";
+            // A new game is starting (initial start or rematch). Clear any
+            // rematch intent and reveal flags left over from the previous game,
+            // and tear down lingering game-over / rematch menu buttons.
+            this.rematchState.localRequested = false;
+            this.game._otherPlayersRevealed = false;
+            this.game._botRevealed = false;
+            if (this.game.menuInputManager) {
+                this.game.menuInputManager.unregisterGameOverMenuButtons();
+            }
+            if (this.game.waitingMenuInputManager) {
+                this.game.waitingMenuInputManager.unregisterRematchPendingMenuButtons();
+            }
+            // Reset game state so stale data doesn't linger before sync fills it in
+            this.clearPlayerState();
             // Start countdown synced from host
             const remoteGame = this.syncSystem ? this.syncSystem.getRemote("game") : null;
             if (this.game.countdown) {
@@ -1213,9 +1233,13 @@ class HotpotNetworkSession {
             }
             this.game.gameState = "onlineMultiplayer";
         } else if (remoteState === "GAME_OVER") {
+            this.state = "GAME_OVER";
             this.game.gameState = "gameOver";
         } else if (remoteState === "REMATCH_PENDING") {
-            this.game.gameState = "rematchPending";
+            // The opponent wants a rematch but we haven't decided yet. Stay on
+            // whatever screen we're on (game-over if we haven't asked, or our
+            // own rematch-pending screen if we have) — the game-over screen
+            // surfaces the opponent's request so we can accept it.
         }
     }
 }

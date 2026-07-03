@@ -1,0 +1,25 @@
+hotpot todos
+
+timeout for players in online mode
+
+set highlighting is weird and conflicts with selection glow
+
+skipTurn() probably should be better suited to actually skip, it currently like, makes plays for the player idk it'll need design considerations
+
+deck needs to be a Card not a mojang piece emoji and be face down and flip on draw, glow when clickable, no red box
+
+discard piles should be flipped and only top card face up
+
+settings menu for network make sure quit game is graceful, remove speed option/label
+
+player nameplates positioning/styling improvments (currently shit)
+
+drawnCard positions should be centered on hand for local and remote players (will have to rework discard piles/deck styling and positioning)
+
+rematch flow is fucked up, needs design
+
+rematch was at one point fucking up hands and they were face down for the local player on rematch, rematch testing needed
+
+pick foods that have emojis
+
+-portrait orientation? landscape? idk

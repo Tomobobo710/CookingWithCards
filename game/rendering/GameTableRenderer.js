@@ -325,12 +325,7 @@ class HotpotGameTableRenderer {
             this.ctx.fillText('DRAWN', drawnRect.x + drawnRect.w / 2, drawnRect.y - 8);
         }
 
-        if (player.sets.length > 0) {
-            this.ctx.fillStyle = '#90ee90';
-            this.ctx.font = '12px Arial';
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText(`Locked sets: ${player.sets.length}`, 10, HOTPOT.LAYOUT.HAND_Y - 6);
-        }
+ 
     }
 
     drawOtherPlayerHand(player, index) {
@@ -473,6 +468,17 @@ class HotpotGameTableRenderer {
                 const setInfo = p.sets.length > 0 ? ` (${p.sets.length} sets)` : '';
                 this.ctx.fillText(`${p.name}: ${p.score} points${setInfo}`, HOTPOT.WIDTH / 2, y);
                 y += 30;
+            }
+        }
+
+        // In online play, let the local player know the opponent wants a rematch.
+        const ns = this.game.networkSession;
+        if (ns && ns.syncSystem) {
+            const remoteMatch = ns.syncSystem.getRemote('match');
+            if (remoteMatch && remoteMatch.wantsRematch) {
+                this.ctx.fillStyle = '#7CFC00';
+                this.ctx.font = 'bold 18px Arial';
+                this.ctx.fillText('Opponent wants a rematch!', HOTPOT.WIDTH / 2, HOTPOT.LAYOUT.GAMEOVER_BUTTON_START_Y - 30);
             }
         }
 

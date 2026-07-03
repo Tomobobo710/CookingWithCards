@@ -218,6 +218,7 @@ class HotpotMenuInputManager {
                 if (g.networkSession) {
                     g.networkSession.requestRematch();
                 }
+                this.unregisterGameOverMenuButtons();
                 break;
 
             case "backToLobby":
